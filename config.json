@@ -1,0 +1,8 @@
+{
+    "DBNAME": "sampleTestDatabase",
+    "PORT":"27017",
+    "DBIP":"localhost",
+    "USENAME":"",
+    "PASSWORD":""
+
+}
