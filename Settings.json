@@ -1,0 +1,29 @@
+{
+    "workbench.colorTheme": "Winter is Coming (Dark Black)",
+    "explorer.confirmDragAndDrop": false,
+    "yaml.schemas": {
+        "file:///c%3A/Users/admin/.vscode/extensions/atlassian.atlascode-3.0.9/resources/schemas/pipelines-schema.json": "bitbucket-pipelines.yml"
+    },
+    "atlascode.jira.jqlList": [
+        {
+            "id": "e9468cc3-a929-475c-bd62-388a716f854e",
+            "enabled": true,
+            "name": "My kissht Issues",
+            "query": "assignee = currentUser() AND resolution = Unresolved ORDER BY lastViewed DESC",
+            "siteId": "76a6058f-c3ec-4764-8c15-e7d4a3e8aae2",
+            "monitor": true
+        }
+    ],
+    "[python]": {
+        "editor.formatOnType": true
+    },
+    "json-to-go.inputSource": "selection",
+    "git.autofetch": true,
+    "explorer.confirmDelete": false,
+    "php.validate.executablePath": "",
+    "go.toolsManagement.autoUpdate": true,
+    "editor.accessibilitySupport": "off",
+    "editor.codeActionsOnSave": {
+        
+    }
+}
