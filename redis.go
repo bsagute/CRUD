@@ -14,7 +14,14 @@ import (
 var (
 	RedisClient *redis.Client
 )
+// Load Environment Variables
+	env := os.Getenv("APP_ENV")
+	envPath := "configs/" + env + ".env"
 
+	viper.SetConfigFile(envPath)
+	viper.ReadInConfig()
+	viper.AutomaticEnv()
+	redis.InitRedisDB()
 func InitRedisDB() error {
 	// Replace these with your Redis server's connection details.
 	redisAddr := viper.GetString("REDIS_ADDR")     // Redis server address
