@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"digi-model-engine/utils/constants"
+	"digi-model-engine/utils/exceptions"
 	"fmt"
 	"log"
 	"time"
@@ -14,14 +15,7 @@ import (
 var (
 	RedisClient *redis.Client
 )
-// Load Environment Variables
-	env := os.Getenv("APP_ENV")
-	envPath := "configs/" + env + ".env"
 
-	viper.SetConfigFile(envPath)
-	viper.ReadInConfig()
-	viper.AutomaticEnv()
-	redis.InitRedisDB()
 func InitRedisDB() error {
 	// Replace these with your Redis server's connection details.
 	redisAddr := viper.GetString("REDIS_ADDR")     // Redis server address
@@ -49,7 +43,7 @@ func InitRedisDB() error {
 	return nil
 }
 
-func FetchKeyFromRedis(key string) string {
+func FetchFieldFromRedis(key, field string) string {
 	if RedisClient == nil {
 		log.Println("Redis client is not initialized.")
 		return ""
@@ -58,16 +52,32 @@ func FetchKeyFromRedis(key string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	val, err := RedisClient.Get(ctx, key).Result()
+	val, err := RedisClient.HGet(ctx, key, field).Result()
 	if err != nil {
 		if err == redis.Nil {
-			fmt.Printf("Key '%s' does not exist in Redis\n", key)
+			exceptions.InternalServerError(err)
 		} else {
-			log.Fatalf("Error fetching key '%s' from Redis: %v\n", key, err)
+			log.Fatalf("Error fetching field '%s' from hash '%s' in Redis: %v\n", field, key, err)
 		}
 		return ""
 	}
 
-	fmt.Printf("Key '%s' has the value: %s\n", key, val)
 	return val
+}
+
+func InsertFieldIntoRedis(key, field, value string) error {
+	if RedisClient == nil {
+		return fmt.Errorf("Redis client is not initialized.")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := RedisClient.HSet(ctx, key, field, value).Result()
+	if err != nil {
+		log.Fatalf("Error inserting field '%s' with value '%s' into hash '%s' in Redis: %v\n", field, value, key, err)
+		return err
+	}
+
+	return nil
 }
