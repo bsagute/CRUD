@@ -1,0 +1,72 @@
+package main
+
+import (
+	"fmt"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"reflect"
+)
+
+func main() {
+	// Replace these with your PostgreSQL database details
+	dsn := "user=username password=password dbname=yourdb sslmode=disable"
+
+	// Open a connection to the PostgreSQL database
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		fmt.Println("Failed to connect to database:", err)
+		return
+	}
+
+	// Your data in map[string]interface{} format
+	data := map[string]interface{}{
+		"Column1": "value1",
+		"Column2": 42,
+		"Column3": true,
+		// Add more key-value pairs corresponding to your columns
+	}
+
+	// Dynamically create a new struct type for the table
+	tableName := "your_table_name" // Replace with your desired table name
+	newStruct := createStructFromMap(data)
+	db.Table(tableName).AutoMigrate(newStruct)
+
+	// Create a new record in the database using GORM
+	result := db.Table(tableName).Create(data)
+
+	// Check for errors during record creation
+	if result.Error != nil {
+		fmt.Println("Error creating record:", result.Error)
+		return
+	}
+
+	fmt.Println("Record created successfully")
+}
+
+// createStructFromMap dynamically creates a new struct type based on the keys of the map
+func createStructFromMap(data map[string]interface{}) interface{} {
+	type generatedStruct struct {
+		gorm.Model
+	}
+
+	for key, value := range data {
+		// Infer the type of the field from the value
+		fieldType := reflect.TypeOf(value)
+
+		// Add the field to the struct
+		field := reflect.StructField{
+			Name: key,
+			Type: fieldType,
+		}
+
+		structType := reflect.StructOf([]reflect.StructField{field})
+		generatedStructType := reflect.PtrTo(structType)
+
+		// Create an instance of the struct
+		generatedStructInstance := reflect.New(generatedStructType.Elem()).Interface()
+
+		return generatedStructInstance
+	}
+
+	return nil
+}
