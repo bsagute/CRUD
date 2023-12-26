@@ -1,0 +1,22 @@
+version: '3'
+services:
+  app:
+    build: .
+    network_mode: host  # Use the host network
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: "redis:latest"
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: "postgres:latest"
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: your_postgres_user
+      POSTGRES_PASSWORD: your_postgres_password
+      POSTGRES_DB: your_postgres_db
