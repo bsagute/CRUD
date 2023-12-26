@@ -2,21 +2,37 @@ version: '3'
 services:
   app:
     build: .
-    network_mode: host  # Use the host network
+    networks:
+      - metrics_bridge
     depends_on:
       - redis
       - postgres
+    ports:
+      - "8089:8089"  # Expose port 8089 from the container to the host
+    environment:
+      APP_ENV: production  # Set an environment variable
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Map the host machine's IP address to a hostname
 
   redis:
     image: "redis:latest"
+    networks:
+      - metrics_bridge
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes  # Example of custom command
 
   postgres:
     image: "postgres:latest"
+    networks:
+      - metrics_bridge
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: your_postgres_user
-      POSTGRES_PASSWORD: your_postgres_password
-      POSTGRES_DB: your_postgres_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ""
+      POSTGRES_DB: metrics_dashboard
+
+networks:
+  metrics_bridge:
+    driver: bridge
