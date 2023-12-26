@@ -1,0 +1,17 @@
+# Use an official Golang runtime as a parent image
+FROM golang:latest
+
+# Set the working directory to /go/src/app
+WORKDIR /go/src/app
+
+# Copy the current directory contents into the container at /go/src/app
+COPY . /go/src/app
+
+# Install any needed packages specified in the go.mod and go.sum files
+RUN go mod download
+
+# Expose port 8089 to the outside world
+EXPOSE 8089
+
+# Command to run the executable
+CMD ["./main"]
