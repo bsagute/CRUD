@@ -3,9 +3,8 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"unsafe"
-
-	"github.com/dustin/go-humanize"
 )
 
 func deepSizeOf(v interface{}) (uintptr, error) {
@@ -61,6 +60,19 @@ func deepSizeOfValue(v reflect.Value, seen map[uintptr]bool) (uintptr, error) {
 	return size, nil
 }
 
+func formatBytes(size uintptr) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "kMGTPE"[exp])
+}
+
 func main() {
 	myMap := make(map[string]interface{})
 	myMap["key1"] = "value1"
@@ -73,8 +85,5 @@ func main() {
 		return
 	}
 
-	mapSizeInKb := float64(mapSize) / 1024.0
-
-	fmt.Printf("Size of the map: %s\n", humanize.Bytes(mapSize))
-	fmt.Printf("Size of the map: %.2f KB\n", mapSizeInKb)
+	fmt.Printf("Size of the map: %s\n", formatBytes(mapSize))
 }
