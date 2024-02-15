@@ -1,0 +1,153 @@
+package main
+
+import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+	"github.com/willf/bloom"
+)
+
+const (
+	// CSV file details
+	csvFilePath = "records_1000.csv" // Path to the CSV file
+
+	// Redis connection details
+	redisAddr     = "localhost:6379" // Redis server address
+	redisPassword = ""               // Password (leave empty if no password)
+	redisDB       = 0                // Redis database number
+
+	// Bloom filter parameters
+	bloomFilterCapacity = 1000000 // Bloom filter capacity
+	bloomFilterError    = 0.01     // Desired error rate for Bloom filter
+)
+
+type MetricData struct {
+	EntityID    string  `json:"entityId"`
+	MetricValue float64 `json:"metricValue"`
+	MetricID    string  `json:"metricId"`
+	Timestamp   string  `json:"timestamp"`
+}
+
+var (
+	RedisClient *redis.Client
+	ctx         = context.Background()
+)
+
+func main() {
+	// Initialize Redis connection
+	if err := initRedisDB(); err != nil {
+		log.Fatalf("Failed to initialize Redis DB: %v", err)
+	}
+
+	// Create Bloom filter
+	bf := bloom.NewWithEstimates(bloomFilterCapacity, bloomFilterError)
+
+	// Open the CSV file
+	file, err := os.Open(csvFilePath)
+	if err != nil {
+		log.Fatalf("Failed to open CSV file: %v", err)
+	}
+	defer file.Close()
+
+	// Create a new CSV reader
+	reader := csv.NewReader(file)
+
+	// Read the CSV headers
+	_, err = reader.Read()
+	if err != nil {
+		log.Fatalf("Failed to read CSV headers: %v", err)
+	}
+
+	// Record the start time
+	startTime := time.Now()
+
+	// Record the number of failed retrievals
+	failedRetrievals := 0
+
+	// Record the number of confirmed retrievals
+	confirmedRetrievals := 0
+
+	// Process each row in the CSV file
+	for rowCount := 1; ; rowCount++ {
+		// Read the next row from the CSV file
+		row, err := reader.Read()
+		if err != nil {
+			// Check for end of file
+			if err == io.EOF {
+				break
+			}
+			log.Fatalf("Error reading CSV row: %v", err)
+		}
+
+		// Generate key from the row number
+		key := fmt.Sprintf("row:%d", rowCount)
+
+		// Check if key probably exists in Bloom filter
+		if bf.TestString(key) {
+			// If probably exists, perform a more expensive lookup operation
+			data, err := fetchDataFromRedis(key)
+			if err != nil {
+				log.Printf("Failed to fetch data for key '%s' from Redis: %v", key, err)
+				failedRetrievals++
+				continue
+			}
+			// Process the fetched data as needed
+			fmt.Printf("Data fetched for key '%s': %s\n", key, data)
+			confirmedRetrievals++
+		}
+	}
+
+	// Record the end time
+	endTime := time.Now()
+
+	// Calculate the total time taken
+	totalTime := endTime.Sub(startTime)
+
+	fmt.Printf("All data fetched from Redis successfully in %v seconds!\n", totalTime.Seconds())
+	fmt.Printf("Number of confirmed retrievals: %d\n", confirmedRetrievals)
+	fmt.Printf("Number of failed retrievals: %d\n", failedRetrievals)
+}
+
+// InitializeRedisDB initializes the Redis database connection
+func initRedisDB() error {
+	// Create a Redis client
+	client := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: redisPassword,
+		DB:       redisDB,
+	})
+
+	// Ping the Redis server to test the connection
+	if err := client.Ping(ctx).Err(); err != nil {
+		return fmt.Errorf("Failed to connect to Redis: %v", err)
+	}
+
+	// Assign the Redis client to the global variable for later use
+	RedisClient = client
+
+	return nil
+}
+
+// fetchDataFromRedis fetches data from Redis based on the given key
+func fetchDataFromRedis(key string) (string, error) {
+	if RedisClient == nil {
+		return "", fmt.Errorf("Redis client is not initialized")
+	}
+
+	// Fetch data from Redis using the key
+	data, err := RedisClient.HGet(ctx, "metric_data", key).Result()
+	if err != nil {
+		return "", fmt.Errorf("Error fetching data for key '%s' from Redis: %v", key, err)
+	}
+
+	return data, nil
+}
