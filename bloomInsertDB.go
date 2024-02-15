@@ -23,16 +23,9 @@ const (
 	redisPassword = ""               // Password (leave empty if no password)
 	redisDB       = 0                // Redis database number
 
-	// Bloom filter details
+	// Bloom filter name
 	bloomFilterName = "optimizeKeyRedisPerformance"
 )
-
-type MetricData struct {
-	EntityID    string  `json:"entityId"`
-	MetricValue float64 `json:"metricValue"`
-	MetricID    string  `json:"metricId"`
-	Timestamp   string  `json:"timestamp"`
-}
 
 var (
 	RedisClient *redis.Client
@@ -45,8 +38,8 @@ func main() {
 		log.Fatalf("Failed to initialize Redis DB: %v", err)
 	}
 
-	// Create a new Bloom filter if not exists
-	if _, err := RedisClient.Do(ctx, "BF.RESERVE", bloomFilterName, "0.001", "1000000").Result(); err != nil {
+	// Create a new Bloom filter
+	if err := createBloomFilter(); err != nil {
 		log.Fatalf("Failed to create Bloom filter: %v", err)
 	}
 
@@ -55,11 +48,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to open CSV file: %v", err)
 	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			log.Fatalf("Error closing CSV file: %v", err)
-		}
-	}()
+	defer file.Close()
 
 	// Create a new CSV reader
 	reader := csv.NewReader(file)
@@ -69,36 +58,25 @@ func main() {
 		log.Fatalf("Failed to read CSV headers: %v", err)
 	}
 
-	// Create a channel to communicate between goroutines
-	keyCh := make(chan string)
-
-	// Create a wait group to wait for all goroutines to finish
-	var wg sync.WaitGroup
-
 	// Record the start time
 	startTime := time.Now()
 
-	// Record the number of failed insertions
-	var failedInsertions int
-	var failedInsertionsMutex sync.Mutex
+	// Record the number of successful insertions
+	successfulInsertions := 0
 
-	// Process each row in the CSV file concurrently
-	for rowCount := 1; ; rowCount++ {
-		// Read the next row from the CSV file
+	// Process each row in the CSV file
+	var wg sync.WaitGroup
+	for {
 		row, err := reader.Read()
 		if err != nil {
-			// Check for end of file
 			if err == io.EOF {
 				break
 			}
 			log.Fatalf("Error reading CSV row: %v", err)
 		}
 
-		// Increment the wait group counter
 		wg.Add(1)
-
-		// Process the row in a separate goroutine
-		go func(row []string, rowCount int) {
+		go func(row []string) {
 			defer wg.Done()
 
 			// Construct MetricData object from CSV row
@@ -110,34 +88,22 @@ func main() {
 			// Check if the key exists in the Bloom filter
 			if exists, err := existsInBloomFilter(key); err != nil {
 				log.Printf("Error checking key in Bloom filter: %v", err)
-				failedInsertionsMutex.Lock()
-				failedInsertions++
-				failedInsertionsMutex.Unlock()
 			} else if !exists {
-				// If the key does not exist in the Bloom filter, add it
+				// If the key does not exist in the Bloom filter, add it and insert into Redis
 				if err := insertIntoBloomFilter(key); err != nil {
 					log.Printf("Failed to insert key into Bloom filter: %v", err)
-					failedInsertionsMutex.Lock()
-					failedInsertions++
-					failedInsertionsMutex.Unlock()
+				} else {
+					if err := insertIntoRedis(key); err != nil {
+						log.Printf("Failed to insert key into Redis: %v", err)
+					} else {
+						successfulInsertions++
+					}
 				}
 			}
-
-			// Send the key through the channel
-			keyCh <- key
-		}(row, rowCount)
+		}(row)
 	}
 
-	// Close the channel after all keys are sent
-	go func() {
-		wg.Wait()
-		close(keyCh)
-	}()
-
-	// Insert keys into Redis from the channel
-	for key := range keyCh {
-		// Perform additional processing or insertion into Redis here, if needed
-	}
+	wg.Wait()
 
 	// Record the end time
 	endTime := time.Now()
@@ -146,7 +112,7 @@ func main() {
 	totalTime := endTime.Sub(startTime)
 
 	fmt.Printf("All keys processed successfully in %v seconds!\n", totalTime.Seconds())
-	fmt.Printf("Number of failed insertions: %d\n", failedInsertions)
+	fmt.Printf("Number of successful insertions: %d\n", successfulInsertions)
 }
 
 // InitializeRedisDB initializes the Redis database connection
@@ -165,6 +131,28 @@ func initRedisDB() error {
 
 	// Assign the Redis client to the global variable for later use
 	RedisClient = client
+
+	return nil
+}
+
+// createBloomFilter creates a new Bloom filter if not exists
+func createBloomFilter() error {
+	if RedisClient == nil {
+		return fmt.Errorf("Redis client is not initialized")
+	}
+
+	// Check if the Bloom filter already exists
+	exists, err := RedisClient.Do(ctx, "BF.EXISTS", bloomFilterName).Bool()
+	if err != nil {
+		return fmt.Errorf("Error checking Bloom filter existence: %v", err)
+	}
+
+	// If the Bloom filter doesn't exist, create a new one
+	if !exists {
+		if _, err := RedisClient.Do(ctx, "BF.RESERVE", bloomFilterName, "0.001", "1000000").Result(); err != nil {
+			return fmt.Errorf("Error creating Bloom filter: %v", err)
+		}
+	}
 
 	return nil
 }
@@ -216,4 +204,18 @@ func existsInBloomFilter(key string) (bool, error) {
 	}
 
 	return exists == 1, nil
+}
+
+// insertIntoRedis inserts a key into Redis
+func insertIntoRedis(key string) error {
+	if RedisClient == nil {
+		return fmt.Errorf("Redis client is not initialized")
+	}
+
+	// Insert the key into Redis
+	if _, err := RedisClient.Do(ctx, "SET", key, "").Result(); err != nil {
+		return fmt.Errorf("Error inserting key into Redis: %v", err)
+	}
+
+	return nil
 }
