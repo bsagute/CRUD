@@ -4,29 +4,25 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"log"
-	"math"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/RedisBloom/redisbloom-go"
+	redis_bloom_go "github.com/RedisBloom/redisbloom-go"
 	"github.com/go-redis/redis/v8"
 )
 
 const (
 	// Redis connection details
 	redisAddr     = "localhost:6379" // Redis server address
-	redisPassword = ""                // Password (leave empty if no password)
-	redisDB       = 0                 // Redis database number
+	redisPassword = ""               // Password (leave empty if no password)
+	redisDB       = 9                // Redis database number
 
 	// Bloom filter name
 	bloomFilterName = "optimizeKeyRedisPerformance"
-
-	// Bloom filter parameters
-	n = 100000
-	p = 0.0000001
-	k = 25
 
 	// CSV file details
 	csvFilePath = "records.csv" // Path to the CSV file
@@ -38,7 +34,7 @@ var (
 
 // generateKey generates a single string key from CSV row fields
 func generateKey(row []string) string {
-	return fmt.Sprintf("%s:%s:%s:%s", row[0], row[1], row[2], row[3])
+	return strings.Join(row, ":")
 }
 
 func main() {
@@ -49,18 +45,21 @@ func main() {
 		DB:       redisDB,
 	})
 
+	// Close the Redis client when main function exits
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			log.Printf("Error closing Redis client: %v\n", err)
+		}
+	}()
+
 	// Create a RedisBloom client
-	rb := redisbloom.NewClient(rdb)
+	rb := redis_bloom_go.NewClient(redisAddr, bloomFilterName, nil)
 
-	// Calculate the number of bits required for the Bloom filter
-	m := uint64(float64(-1*n*k) / math.Log(1-p))
-
-	// Create a Bloom filter with calculated parameters
-	filter := redisbloom.NewFilterOpt("BF", bloomFilterName, m, k)
-	if err := rb.CreateFilter(ctx, filter); err != nil {
-		log.Fatalf("Failed to create Bloom filter: %v", err)
+	// Reserve the Bloom filter with specified parameters
+	if err := rb.Reserve(bloomFilterName, 0.0000001, 100000); err != nil {
+		log.Fatalf("Failed to reserve Bloom filter: %v", err)
 	}
-	fmt.Printf("Bloom filter created successfully: %s\n", bloomFilterName)
+	fmt.Printf("Bloom filter reserved successfully: %s\n", bloomFilterName)
 
 	// Open the CSV file
 	file, err := os.Open(csvFilePath)
@@ -91,14 +90,11 @@ func main() {
 	for {
 		row, err := reader.Read()
 		if err != nil {
-			if err == csv.ErrFieldCount {
-				break // Ignore extra fields, if any
-			} else if err == io.EOF {
+			if err == io.EOF {
 				break // Reached end of file
-			} else {
-				log.Printf("Error reading CSV row: %v\n", err)
-				continue
 			}
+			log.Printf("Error reading CSV row: %v\n", err)
+			continue
 		}
 
 		// Increment the wait group
@@ -111,14 +107,14 @@ func main() {
 		go func(key string) {
 			defer wg.Done()
 
-			inserted, err := rb.AddMulti(ctx, filter, key)
+			exists, err := rb.Add(key, "") // Use key as the only argument for the Add method
 			if err != nil {
 				log.Printf("Failed to insert key into Bloom filter: %v\n", err)
 				return
 			}
 
 			// Increment successful insertions count
-			if inserted {
+			if !exists {
 				mu.Lock()
 				defer mu.Unlock()
 				successfulInsertions++
