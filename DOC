@@ -1,0 +1,175 @@
+Here's a single-page document summarizing the `BF.ADD`, `BF.INFO`, `BF.INSERT`, and `BF.EXISTS` commands in Redis Bloom Filter:
+
+---
+
+# Redis Bloom Filter Commands Summary
+
+## BF.ADD
+
+**Overview:**
+The `BF.ADD` command efficiently adds an item to a Bloom filter.
+
+**Syntax:**
+```
+BF.ADD key item
+```
+
+**Parameters:**
+- `key`: Name of the Bloom filter key.
+- `item`: Item to add to the Bloom filter.
+
+**Return Value:**
+- `1`: Successful addition.
+- `0`: Item already present in the filter.
+
+**Time Complexity:**
+- O(k), where k is the number of hash functions.
+
+**Example:**
+```redis
+BF.ADD my_bloom_filter item1
+```
+
+## BF.INFO
+
+**Overview:**
+Provides information about a Bloom filter.
+
+**Syntax:**
+```
+BF.INFO key [CAPACITY | SIZE | FILTERS | ITEMS | EXPANSION]
+```
+
+**Parameters:**
+- `key`: Name of the Bloom filter key.
+- Optional:
+  - `CAPACITY`: Number of unique items before scaling.
+  - `SIZE`: Memory size allocated.
+  - `FILTERS`: Number of sub-filters.
+  - `ITEMS`: Number of items added.
+  - `EXPANSION`: Expansion rate.
+
+**Return Value:**
+- Array reply with key-value pairs.
+
+**Time Complexity:**
+- O(1)
+
+**Example:**
+```redis
+BF.INFO my_bloom_filter CAPACITY
+```
+
+## BF.INSERT
+
+**Overview:**
+Creates a new Bloom filter or adds items to an existing one.
+
+**Syntax:**
+```
+BF.INSERT key [CAPACITY capacity] [ERROR error] [EXPANSION expansion] [NOCREATE] [NONSCALING] ITEMS item [item ...]
+```
+
+**Parameters:**
+- `key`: Name of the Bloom filter key.
+- `ITEMS item ...`: Items to add.
+- Optional parameters for filter configuration.
+
+**Return Value:**
+- Array reply indicating successful addition.
+
+**Time Complexity:**
+- O(k * n), where k is the number of hash functions and n is the number of items.
+
+**Example:**
+```redis
+BF.INSERT my_bloom_filter ITEMS item1 item2
+```
+
+## BF.EXISTS
+
+**Overview:**
+Determines if an item exists in a Bloom filter.
+
+**Syntax:**
+```
+BF.EXISTS key item
+```
+
+**Parameters:**
+- `key`: Name of the Bloom filter key.
+- `item`: Item to check existence for.
+
+**Return Value:**
+- `1`: Item likely exists.
+- `0`: Item does not exist.
+
+**Time Complexity:**
+- O(k), where k is the number of hash functions.
+
+**Example:**
+```redis
+BF.EXISTS my_bloom_filter item1
+```
+
+---
+
+
+
+
+Understood. Here's how you can incorporate those steps and details into your document:
+
+4. Testing
+
+Performance Testing:
+
+Inserting Records from Excel: Start by inserting 100,000 records from an Excel sheet into your database. Measure the time taken for this operation.
+
+Fetching Keys from Database: Randomly select a key from the database and measure the time taken to retrieve it.
+
+RedisBloom Filter Testing:
+
+Creating 100,000 Keys and Checking Filter Rate: Create 100,000 keys and insert them into the RedisBloom filter. Retrieve keys from the same Excel sheet and check their filter rate in the database.
+
+Verification of Filtered Keys: Fetch all keys from the filter and verify whether they match the keys retrieved from the database. Ensure that the filter correctly identifies the existence or absence of keys.
+
+Re-insertion Testing: After inserting the keys into the filter, attempt to insert them again into the filter. Check whether the filter correctly identifies these duplicate insertions.
+
+5. Results Analysis
+
+Time Taken for Operations: Record the time taken for each step of the testing process, including inserting records, fetching keys from the database, creating keys for the filter, and verifying filter results.
+
+Key Size: Note the size of each key in the database and the RedisBloom filter.
+
+Filter Rate: Calculate the filter rate based on the number of keys inserted into the filter and compare it with the expected error rate.
+
+
+Here's the formatted Confluence page with the Bloom filter parameters for both 100,000 and 200,000 records:
+
+---
+
+# Bloom Filter Parameters
+
+Bloom filters are a probabilistic data structure used for efficiently testing set membership. They find a wide range of uses, including tracking read articles, speeding up Bitcoin clients, detecting malicious websites, and improving cache performance.
+
+## Parameters for 100,000 Records
+
+- **Number of items in the filter (n):** 100,000
+- **Probability of false positives (p):** 1.0E-7 (1 in 10,000,000)
+- **Number of bits in the filter (m):** 3,360,057 (410.16 KiB)
+- **Number of hash functions (k):** 25
+
+These parameters indicate that for a Bloom filter designed to accommodate 100,000 records with a desired false positive rate of 1 in 10,000,000, the filter would require approximately 410.16 KiB of memory and utilize 25 hash functions for element insertion and retrieval.
+
+## Parameters for 200,000 Records
+
+- **Number of items in the filter (n):** 200,000
+- **Probability of false positives (p):** 1.0E-7 (1 in 10,000,000)
+- **Number of bits in the filter (m):** [Calculate based on formula or use provided size]
+- **Number of hash functions (k):** 25
+
+To accommodate 200,000 records with the same false positive rate, the filter parameters remain the same. The size of the filter (m) would need to be adjusted accordingly based on the desired capacity.
+
+These parameters are crucial for determining the optimal size and configuration of a Bloom filter, ensuring efficient utilization of memory and accurate membership testing for a given dataset size and false positive rate.
+
+--- 
