@@ -1,0 +1,63 @@
+package main
+
+import (
+    "fmt"
+    "strconv"
+)
+
+// Define a struct named `RedisConnection`
+type RedisConnection struct {
+    Host             string // Mandatory: Hostname or IP address of the Redis server
+    Port             int    // Mandatory: Port number of the Redis server
+    Authentication   string // Optional: Password or authentication token for Redis
+    DatabaseIndex    int    // Optional: Index of the Redis database to connect to
+    UseTLS           bool   // Optional: Whether to use TLS/SSL for the connection
+    MaxRetries       int    // Optional: Maximum number of retries for connection attempts
+    ConnectionTimeout int    // Optional: Timeout for establishing a connection (milliseconds)
+    ReadTimeout      int    // Optional: Timeout for reading data from the connection (milliseconds)
+    WriteTimeout     int    // Optional: Timeout for writing data to the connection (milliseconds)
+}
+
+// Function to generate Redis URI from RedisConnection struct
+func (rc *RedisConnection) GenerateURI() string {
+    uri := "redis://"
+
+    // Append authentication details if available
+    if rc.Authentication != "" {
+        uri += rc.Authentication + "@"
+    }
+
+    // Append host and port
+    uri += rc.Host + ":" + strconv.Itoa(rc.Port)
+
+    // Append database index if available
+    if rc.DatabaseIndex != 0 {
+        uri += "/" + strconv.Itoa(rc.DatabaseIndex)
+    }
+
+    // Append TLS/SSL prefix if UseTLS is true
+    if rc.UseTLS {
+        uri = "rediss://" + uri[8:] // Replace "redis://" with "rediss://"
+    }
+
+    return uri
+}
+
+func main() {
+    // Create an instance of the RedisConnection struct
+    redisConn := RedisConnection{
+        Host:             "127.0.0.1", // Mandatory
+        Port:             6379,        // Mandatory
+        Authentication:   "your_password", // Optional
+        DatabaseIndex:    0,            // Optional
+        UseTLS:           true,         // Optional
+        MaxRetries:       3,            // Optional
+        ConnectionTimeout: 5000,        // Optional
+        ReadTimeout:      1000,        // Optional
+        WriteTimeout:     1000,        // Optional
+    }
+
+    // Generate and print Redis URI
+    redisURI := redisConn.GenerateURI()
+    fmt.Println("Redis URI:", redisURI)
+}
