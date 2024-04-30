@@ -1,0 +1,133 @@
+Query caching is a technique used to improve the performance of database-driven applications by storing the results of database queries in a cache for future use. Instead of executing the same database query repeatedly, the cached result can be retrieved quickly, reducing the load on the database server and improving overall application performance.
+
+Brief overview:
+
+- **How it Works:** When a query is executed against the database, the results are stored in a cache along with a unique identifier or key. Subsequent identical queries can then be served directly from the cache without hitting the database again.
+
+- **Benefits:**
+  1. **Improved Performance:** Cached query results can be retrieved much faster than executing the query against the database, resulting in reduced response times and improved application performance.
+  2. **Reduced Database Load:** By serving queries from the cache, the load on the database server is significantly reduced, leading to better scalability and resource utilization.
+  3. **Enhanced Scalability:** Query caching helps improve the scalability of database-driven applications by reducing the need for frequent database access, allowing them to handle more concurrent users or requests.
+  4. **Consistency:** Query caching mechanisms often include features for cache invalidation to ensure that cached data remains up-to-date with changes in the underlying database, maintaining data consistency.
+  5. **Cost Savings:** By minimizing the need for expensive database queries, query caching can help reduce infrastructure costs associated with scaling database resources.
+
+- **Considerations:**
+  1. **Cache Invalidation:** Implementing an effective cache invalidation strategy is crucial to ensure that stale data is not served from the cache, maintaining data consistency.
+  2. **Cache Size and Memory Management:** Proper management of cache size and memory usage is essential to prevent excessive memory consumption and optimize cache performance.
+  3. **Query Complexity:** Not all queries are suitable for caching, especially those with parameters that vary frequently or queries that involve real-time data. It's essential to identify cacheable queries based on their frequency and stability.
+  4. **Concurrency:** Query caching mechanisms should be designed to handle concurrent access to cached data, ensuring thread safety and avoiding race conditions.
+  5. **Security:** Considerations should be made to ensure that sensitive data is not exposed through cached query results, and proper access controls are in place to protect sensitive information.
+
+
+
+1. **Raw SQL Queries:**
+   - **Pros:**
+     1. Full control over query construction and execution.
+     2. Efficient for complex queries or when performance optimization is critical.
+     3. Well-suited for scenarios requiring database-specific optimizations.
+     4. Minimal performance overhead compared to ORM or query builder libraries.
+     5. Allows direct access to database features like stored procedures and triggers.
+
+   - **Cons:**
+     1. Prone to SQL injection if not handled properly.
+     2. Tedious and error-prone query construction, especially for dynamic queries.
+     3. Less portable across different database systems due to vendor-specific syntax.
+     4. May result in tight coupling between database schema and application code.
+     5. Requires manual handling of database connections, transactions, and error handling.
+
+2. **ORM (Object-Relational Mapping):**
+   - **Pros:**
+     1. Simplifies database interactions by mapping Go structs to database tables.
+     2. Provides features like automatic query generation, data validation, and transaction management.
+     3. Abstracts away database-specific implementation details, enhancing portability.
+     4. Enables rapid development by reducing boilerplate code for CRUD operations.
+     5. Offers object-oriented programming paradigms for working with database entities.
+
+   - **Cons:**
+     1. Performance overhead compared to raw SQL queries, especially for complex queries.
+     2. Limited flexibility for optimizing database interactions at the SQL level.
+     3. ORM-generated queries may not always be efficient or optimal.
+     4. May require additional learning curve for understanding ORM concepts and conventions.
+     5. Can result in inefficient data fetching due to ORM's eager loading behavior.
+
+3. **Query Builders:**
+   - **Pros:**
+     1. Provides a fluent and type-safe way to build SQL queries in Go code.
+     2. Helps avoid SQL injection vulnerabilities by automatically sanitizing inputs.
+     3. Offers better readability and maintainability compared to raw SQL concatenation.
+     4. Facilitates database-agnostic query construction, enhancing portability.
+     5. Allows for dynamic query generation based on runtime conditions or user inputs.
+
+   - **Cons:**
+     1. May not support all SQL features or database-specific syntax, limiting flexibility.
+     2. Still requires knowledge of SQL syntax and database schema.
+     3. Performance overhead compared to raw SQL queries, though generally less than ORMs.
+     4. Lack of type safety when dealing with dynamic query construction.
+     5. Can lead to code verbosity, especially for complex queries or multi-table joins.
+
+4. **Stored Procedures:**
+   - **Pros:**
+     1. Encapsulates business logic in the database, reducing network overhead and improving performance.
+     2. Enhances security by parameterizing queries within the stored procedure, mitigating SQL injection risks.
+     3. Supports complex database operations and transactions within a single atomic unit.
+     4. Allows for reuse of common query logic across multiple applications or modules.
+     5. Provides better performance optimization opportunities through database-specific optimizations.
+
+   - **Cons:**
+     1. Database-dependent and not portable across different database systems.
+     2. May introduce complexity in managing and versioning stored procedures.
+     3. Limited visibility and debugging capabilities compared to application code.
+     4. May lead to "vendor lock-in" by tightly coupling business logic with specific database technology.
+     5. Testing and version control of stored procedures can be challenging, especially in distributed development environments.
+
+5. **NoSQL Databases and Libraries:**
+   - **Pros:**
+     1. Flexible schema allows for storing heterogeneous data without predefined structure.
+     2. Scalable and high-performance for certain use cases like document storage or real-time analytics.
+     3. NoSQL databases excel at handling unstructured or semi-structured data types like JSON or XML.
+     4. Easier horizontal scaling compared to traditional relational databases.
+     5. Can be easier to integrate with modern web development frameworks and microservices architectures.
+
+   - **Cons:**
+     1. Lack of ACID transactions in some NoSQL databases, leading to eventual consistency issues.
+     2. Limited support for complex querying compared to SQL databases, especially for ad-hoc queries.
+     3. Lack of standardized query language and schema enforcement may lead to data inconsistency.
+     4. May require denormalization or duplication of data to optimize queries, increasing storage requirements.
+     5. Maturity and ecosystem support may vary across different NoSQL databases, impacting tooling and community support.
+
+6  LRU (Least Recently Used) Cache:
+Pros:
+Efficiently stores frequently accessed data in memory for quick retrieval.
+Automatically evicts least recently used items when the cache reaches its capacity, ensuring space is available for new data.
+Helps improve application performance by reducing the need to fetch data from slower storage mediums like disk or network.
+Simple to implement and widely supported by caching libraries and frameworks.
+Can be configured with expiration policies to further optimize cache performance and memory usage.
+Cons:
+Limited cache size may lead to frequent cache evictions, reducing cache hit rates.
+May not be suitable for scenarios requiring precise control over cache eviction or data retention policies.
+Requires careful consideration of cache size and eviction policies to ensure optimal performance.
+May not scale well with extremely large datasets or high concurrency scenarios.
+Does not provide features like cache invalidation or data synchronization mechanisms, which may be required for certain applications.
+
+
+
+Basic Algorithm
+Dev - https://go.dev/play/p/wZBrFL67G_3
+// Set query result in cache
+SetQuery(query, result):
+    Set result in Redis hash with query as key
+    Add query key to Redis sorted set with current timestamp as score
+
+// Get query result from cache
+GetQuery(query):
+    If query exists in Redis hash:
+        Update access timestamp of query in Redis sorted set
+        Return query result
+    Else:
+        Return cache miss
+
+// Perform LRU eviction
+EvictLRU():
+    Get excess keys beyond cache capacity from Redis sorted set
+    If excess keys exist:
+        Delete excess keys and their corresponding results from Redis cache
