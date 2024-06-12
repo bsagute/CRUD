@@ -4,56 +4,60 @@ import (
     "testing"
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
-    "errors"
+    "github.com/google/uuid"
 )
 
-// MockReadFile defines a mock structure
-type MockReadFile struct {
+// Mocking the dependencies
+type MockDbCon struct {
     mock.Mock
 }
 
-// ReadFile is the mocked method
-func (m *MockReadFile) ReadFile(name string) ([]byte, error) {
-    args := m.Called(name)
-    if args.Get(0) != nil {
-        return args.Get(0).([]byte), args.Error(1)
-    }
-    return nil, args.Error(1)
+func (m *MockDbCon) Raw(query string, args ...interface{}) *MockDbCon {
+    m.Called(query, args)
+    return m
 }
 
-// Function to be tested that uses ioutil.ReadFile (example function)
-func yourFunction(readFile func(string) ([]byte, error)) (string, error) {
-    data, err := readFile("your-file-name")
-    if err != nil {
-        return "", err
-    }
-    return string(data), nil
+func (m *MockDbCon) Find(dest interface{}) *MockDbCon {
+    m.Called(dest)
+    return m
 }
 
-func TestNewItsmMetricRepositoryDb(t *testing.T) {
-    mockReadFile := new(MockReadFile)
-    expectedContent := []byte("your mock content")
-    expectedError := errors.New("file not found")
+type MockS struct {
+    mock.Mock
+}
 
-    // Mock successful file read
-    mockReadFile.On("ReadFile", "your-file-name").Return(expectedContent, nil)
+func (m *MockS) getGorm() *MockDbCon {
+    args := m.Called()
+    return args.Get(0).(*MockDbCon)
+}
 
-    // Call the function you want to test
-    result, err := yourFunction(mockReadFile.ReadFile)
+func TestGetItsmMetricJson(t *testing.T) {
+    mockDbCon := new(MockDbCon)
+    mockS := new(MockS)
+    mockS.On("getGorm").Return(mockDbCon)
+    
+    // Mock inputs
+    graphRequest := &model.GraphRequest{
+        EntityId: []model.EntityId{
+            {Id: uuid.New(), MetricIds: []uuid.UUID{uuid.New()}},
+        },
+    }
 
-    // Check if the function returns the expected result without errors
+    // Mock outputs
+    mockResult := []entity.NonMetricQueryResult{
+        {Id: uuid.New(), Value: "mockValue"},
+    }
+
+    mockDbCon.On("Raw", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockDbCon)
+    mockDbCon.On("Find", mock.Anything).Run(func(args mock.Arguments) {
+        *args.Get(0).(*[]entity.NonMetricQueryResult) = mockResult
+    }).Return(mockDbCon)
+
+    itsmMetric, err := mockS.GetItsmMetricJson(graphRequest)
+
+    // Assertions
     assert.NoError(t, err)
-    assert.Equal(t, "your mock content", result)
-
-    // Mock file read failure
-    mockReadFile.On("ReadFile", "nonexistent-file").Return(nil, expectedError)
-
-    // Call the function you want to test with an error
-    _, err = yourFunction(mockReadFile.ReadFile)
-
-    // Check if the function returns the expected error
-    assert.Error(t, err)
-    assert.Equal(t, expectedError, err)
-
-    mockReadFile.AssertExpectations(t)
+    assert.NotNil(t, itsmMetric)
+    assert.Equal(t, len(itsmMetric.MetricData), len(mockResult))
+    assert.Equal(t, itsmMetric.MetricData[0].Value, mockResult[0].Value)
 }
