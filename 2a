@@ -1,10 +1,42 @@
+package db
+
+import (
+    "os"
+    "log"
+)
+
+var readFile = os.ReadFile
+var logFatal = log.Fatal
+
+
+
+func NewMetricGraphMultiLineRepositoryDb(gormDb *gorm.DB) MetricGraphMultiLineRepositoryDb {
+    content, err := readFile("./pkg/jsondata/metric_multi_line.json")
+    if err != nil {
+        logFatal("json file error", err)
+    }
+
+    var metricGraphMultiLine model.MetricGraphMultiLine
+    errd := json.Unmarshal(content, &metricGraphMultiLine)
+    if errd != nil {
+        logFatal("json unmarshal error", errd)
+    }
+
+    return MetricGraphMultiLineRepositoryDb{metricGraphMultiLine, gormDb}
+}
+
+
+
+
+
+
+
+
 package db_test
 
 import (
-    "encoding/json"
-    "os"
-    "log"
     "testing"
+    "log"
 
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
@@ -17,14 +49,19 @@ type MockGormDB struct {
     mock.Mock
 }
 
-func TestNewMetricGraphMultiLineRepositoryDb(t *testing.T) {
-    // Mock the gorm.DB if needed
-    mockGormDB := new(MockGormDB)
+// Mock readFile and logFatal functions
+var (
+    originalReadFile = db.readFile
+    originalLogFatal = db.logFatal
+)
 
-    // Mock the os.ReadFile function
-    originalReadFile := os.ReadFile
-    defer func() { os.ReadFile = originalReadFile }()
-    os.ReadFile = func(filename string) ([]byte, error) {
+func TestNewMetricGraphMultiLineRepositoryDb(t *testing.T) {
+    defer func() {
+        db.readFile = originalReadFile
+        db.logFatal = originalLogFatal
+    }()
+
+    db.readFile = func(filename string) ([]byte, error) {
         assert.Equal(t, "./pkg/jsondata/metric_multi_line.json", filename)
         return []byte(`{
             "type": "multiline",
@@ -45,37 +82,28 @@ func TestNewMetricGraphMultiLineRepositoryDb(t *testing.T) {
         }`), nil
     }
 
-    // Mock the log.Fatal function to prevent it from exiting the test
-    originalLogFatal := log.Fatal
-    defer func() { log.Fatal = originalLogFatal }()
     var logFatalCalled bool
-    log.Fatal = func(v ...interface{}) {
+    db.logFatal = func(v ...interface{}) {
         logFatalCalled = true
     }
 
-    // Call the function
+    mockGormDB := new(MockGormDB)
     result := db.NewMetricGraphMultiLineRepositoryDb(mockGormDB)
 
-    // Ensure log.Fatal was not called
     assert.False(t, logFatalCalled)
+    assert.NotNil(t, result)
+    assert.Equal(t, "multiline", result.metricGraphMultiLine.Type)
+    assert.Equal(t, "Title", result.metricGraphMultiLine.Title)
+    assert.Equal(t, "mm", result.metricGraphMultiLine.Values.Unit)
+    assert.Equal(t, 30, result.metricGraphMultiLine.Values.ReloadTime)
+    assert.Equal(t, "5m", result.metricGraphMultiLine.Values.DefaultInterval)
+    assert.Equal(t, int64(1625826953), result.metricGraphMultiLine.Values.TimeStamp)
+    assert.Equal(t, []string{"5m", "1d", "1w"}, result.metricGraphMultiLine.Values.Intervals)
+    assert.Equal(t, []int{1, 2, 3}, result.metricGraphMultiLine.Values.X)
+    assert.Equal(t, 7, result.metricGraphMultiLine.Values.Request)
 
-    // Assertions
-    if result != nil {
-        assert.Equal(t, "multiline", result.metricGraphMultiLine.Type)
-        assert.Equal(t, "Title", result.metricGraphMultiLine.Title)
-        assert.Equal(t, "mm", result.metricGraphMultiLine.Values.Unit)
-        assert.Equal(t, 30, result.metricGraphMultiLine.Values.ReloadTime)
-        assert.Equal(t, "5m", result.metricGraphMultiLine.Values.DefaultInterval)
-        assert.Equal(t, int64(1625826953), result.metricGraphMultiLine.Values.TimeStamp)
-        assert.Equal(t, []string{"5m", "1d", "1w"}, result.metricGraphMultiLine.Values.Intervals)
-        assert.Equal(t, []int{1, 2, 3}, result.metricGraphMultiLine.Values.X)
-        assert.Equal(t, 7, result.metricGraphMultiLine.Values.Request)
-
-        y := result.metricGraphMultiLine.Values.Y
-        assert.Len(t, y, 2)
-        assert.Equal(t, []int{10, 20, 30}, y[0].Value)
-        assert.Equal(t, []int{40, 50, 60}, y[1].Value)
-    } else {
-        t.Fatal("Result is nil, expected valid MetricGraphMultiLineRepositoryDb")
-    }
+    y := result.metricGraphMultiLine.Values.Y
+    assert.Len(t, y, 2)
+    assert.Equal(t, []int{10, 20, 30}, y[0].Value)
+    assert.Equal(t, []int{40, 50, 60}, y[1].Value)
 }
