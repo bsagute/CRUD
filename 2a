@@ -1,0 +1,40 @@
+package db_test
+
+import (
+    "io/ioutil"
+    "testing"
+
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
+
+    "github.com/path/to/your/project/db" // Update this path to the actual import path of your project
+    "github.com/path/to/your/project/pkg/model"
+    "gorm.io/gorm"
+)
+
+// Mock the ioutil.ReadFile function
+func mockReadFile(filename string) ([]byte, error) {
+    return []byte(`{"Type": "itsm-metric"}`), nil
+}
+
+func TestNewItsmMetricRepositoryDb(t *testing.T) {
+    // Mock the ioutil.ReadFile function
+    originalReadFile := ioutil.ReadFile
+    ioutil.ReadFile = mockReadFile
+    defer func() { ioutil.ReadFile = originalReadFile }()
+
+    // Mock the gorm.DB object
+    var mockDB *gorm.DB
+
+    // Call the function
+    repo := db.NewItsmMetricRepositoryDb(mockDB)
+
+    // Define the expected result
+    expectedItsmMetric := model.ItsmMetric{
+        Type: "itsm-metric",
+    }
+
+    // Verify the result
+    assert.Equal(t, expectedItsmMetric, repo.ItsmMetric)
+    require.NotNil(t, repo.getGorm)
+}
