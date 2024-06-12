@@ -1,63 +1,58 @@
 package yourpackage
 
 import (
-    "testing"
-    "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
     "github.com/google/uuid"
+    "yourproject/entity"
+    "yourproject/model"
 )
-
-// Mocking the dependencies
-type MockDbCon struct {
-    mock.Mock
-}
-
-func (m *MockDbCon) Raw(query string, args ...interface{}) *MockDbCon {
-    m.Called(query, args)
-    return m
-}
-
-func (m *MockDbCon) Find(dest interface{}) *MockDbCon {
-    m.Called(dest)
-    return m
-}
 
 type MockS struct {
     mock.Mock
 }
 
-func (m *MockS) getGorm() *MockDbCon {
-    args := m.Called()
-    return args.Get(0).(*MockDbCon)
+func (m *MockS) GetItsmMetricJson(request *model.GraphRequest) ([]entity.NonMetricQueryResult, error) {
+    args := m.Called(request)
+    return args.Get(0).([]entity.NonMetricQueryResult), args.Error(1)
 }
+
+
+
+
 
 func TestGetItsmMetricJson(t *testing.T) {
     mockDbCon := new(MockDbCon)
-    mockS := new(MockS)
-    mockS.On("getGorm").Return(mockDbCon)
-    
+    mocks := new(MockS)
+    mocks.On("getGorm").Return(mockDbCon)
+
     // Mock inputs
     graphRequest := &model.GraphRequest{
-        EntityId: []model.EntityId{
-            {Id: uuid.New(), MetricIds: []uuid.UUID{uuid.New()}},
+        EntityId: model.GraphEntityId{
+            Id:      uuid.New(),
+            Metrics: []uuid.UUID{uuid.New()},
         },
     }
 
     // Mock outputs
     mockResult := []entity.NonMetricQueryResult{
-        {Id: uuid.New(), Value: "mockValue"},
+        {EntityId: uuid.New(), Metrics: []byte("metricvalue")},
     }
 
-    mockDbCon.On("Raw", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(mockDbCon)
-    mockDbCon.On("Find", mock.Anything).Run(func(args mock.Arguments) {
-        *args.Get(0).(*[]entity.NonMetricQueryResult) = mockResult
+    mockDbCon.On("Raw", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+        args.Get(0).(*[]entity.NonMetricQueryResult)[0] = mockResult[0]
     }).Return(mockDbCon)
 
-    itsmMetric, err := mockS.GetItsmMetricJson(graphRequest)
+    mockDbCon.On("Find", mock.Anything).Run(func(args mock.Arguments) {
+        args.Get(0).(*[]entity.NonMetricQueryResult)[0] = mockResult[0]
+    }).Return(mockDbCon)
+
+    mocks.On("GetItsmMetricJson", graphRequest).Return(mockResult, nil)
+
+    itsmMetric, err := mocks.GetItsmMetricJson(graphRequest)
 
     // Assertions
     assert.NoError(t, err)
     assert.NotNil(t, itsmMetric)
-    assert.Equal(t, len(itsmMetric.MetricData), len(mockResult))
-    assert.Equal(t, itsmMetric.MetricData[0].Value, mockResult[0].Value)
+    assert.Equal(t, len(graphRequest.MetricData()), len(mockResult))
+    assert.Equal(t, itsmMetric[0].Metrics, mockResult[0].Metrics)
 }
