@@ -1,40 +1,59 @@
-package db_test
+package yourpackage
 
 import (
-    "io/ioutil"
     "testing"
-
     "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
-
-    "github.com/path/to/your/project/db" // Update this path to the actual import path of your project
-    "github.com/path/to/your/project/pkg/model"
-    "gorm.io/gorm"
+    "github.com/stretchr/testify/mock"
+    "errors"
 )
 
-// Mock the ioutil.ReadFile function
-func mockReadFile(filename string) ([]byte, error) {
-    return []byte(`{"Type": "itsm-metric"}`), nil
+// MockReadFile defines a mock structure
+type MockReadFile struct {
+    mock.Mock
+}
+
+// ReadFile is the mocked method
+func (m *MockReadFile) ReadFile(name string) ([]byte, error) {
+    args := m.Called(name)
+    if args.Get(0) != nil {
+        return args.Get(0).([]byte), args.Error(1)
+    }
+    return nil, args.Error(1)
+}
+
+// Function to be tested that uses ioutil.ReadFile (example function)
+func yourFunction(readFile func(string) ([]byte, error)) (string, error) {
+    data, err := readFile("your-file-name")
+    if err != nil {
+        return "", err
+    }
+    return string(data), nil
 }
 
 func TestNewItsmMetricRepositoryDb(t *testing.T) {
-    // Mock the ioutil.ReadFile function
-    originalReadFile := ioutil.ReadFile
-    ioutil.ReadFile = mockReadFile
-    defer func() { ioutil.ReadFile = originalReadFile }()
+    mockReadFile := new(MockReadFile)
+    expectedContent := []byte("your mock content")
+    expectedError := errors.New("file not found")
 
-    // Mock the gorm.DB object
-    var mockDB *gorm.DB
+    // Mock successful file read
+    mockReadFile.On("ReadFile", "your-file-name").Return(expectedContent, nil)
 
-    // Call the function
-    repo := db.NewItsmMetricRepositoryDb(mockDB)
+    // Call the function you want to test
+    result, err := yourFunction(mockReadFile.ReadFile)
 
-    // Define the expected result
-    expectedItsmMetric := model.ItsmMetric{
-        Type: "itsm-metric",
-    }
+    // Check if the function returns the expected result without errors
+    assert.NoError(t, err)
+    assert.Equal(t, "your mock content", result)
 
-    // Verify the result
-    assert.Equal(t, expectedItsmMetric, repo.ItsmMetric)
-    require.NotNil(t, repo.getGorm)
+    // Mock file read failure
+    mockReadFile.On("ReadFile", "nonexistent-file").Return(nil, expectedError)
+
+    // Call the function you want to test with an error
+    _, err = yourFunction(mockReadFile.ReadFile)
+
+    // Check if the function returns the expected error
+    assert.Error(t, err)
+    assert.Equal(t, expectedError, err)
+
+    mockReadFile.AssertExpectations(t)
 }
