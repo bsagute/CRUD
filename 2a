@@ -1,47 +1,81 @@
 package db_test
 
 import (
+    "encoding/json"
+    "os"
+    "log"
     "testing"
+
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
-    "github.com/google/uuid"
-    "yourproject/model"
-    "yourproject/db"
+    "yourproject/db" // Update this import path according to your project structure
+    "gorm.io/gorm"
 )
 
-// Mock dependencies if needed
-type MockDb struct {
+// Mocking gorm.DB if needed
+type MockGormDB struct {
     mock.Mock
 }
 
-func (m *MockDb) getGorm() *gorm.DB {
-    args := m.Called()
-    return args.Get(0).(*gorm.DB)
-}
+func TestNewMetricGraphMultiLineRepositoryDb(t *testing.T) {
+    // Mock the gorm.DB if needed
+    mockGormDB := new(MockGormDB)
 
-func TestGetMetricGraphMultiLine(t *testing.T) {
-    // Initialize the repository
-    repository := db.MetricGraphMultiLineRepositoryDb{}
+    // Mock the os.ReadFile function
+    originalReadFile := os.ReadFile
+    defer func() { os.ReadFile = originalReadFile }()
+    os.ReadFile = func(filename string) ([]byte, error) {
+        assert.Equal(t, "./pkg/jsondata/metric_multi_line.json", filename)
+        return []byte(`{
+            "type": "multiline",
+            "title": "Title",
+            "values": {
+                "unit": "mm",
+                "reloadTime": 30,
+                "defaultInterval": "5m",
+                "timeStamp": 1625826953,
+                "intervals": ["5m", "1d", "1w"],
+                "x": [1, 2, 3],
+                "y": [
+                    {"value": [10, 20, 30]},
+                    {"value": [40, 50, 60]}
+                ],
+                "request": 7
+            }
+        }`), nil
+    }
+
+    // Mock the log.Fatal function to prevent it from exiting the test
+    originalLogFatal := log.Fatal
+    defer func() { log.Fatal = originalLogFatal }()
+    var logFatalCalled bool
+    log.Fatal = func(v ...interface{}) {
+        logFatalCalled = true
+    }
 
     // Call the function
-    result, err := repository.GetMetricGraphMultiLine()
+    result := db.NewMetricGraphMultiLineRepositoryDb(mockGormDB)
+
+    // Ensure log.Fatal was not called
+    assert.False(t, logFatalCalled)
 
     // Assertions
-    assert.NoError(t, err)
-    assert.NotNil(t, result)
+    if result != nil {
+        assert.Equal(t, "multiline", result.metricGraphMultiLine.Type)
+        assert.Equal(t, "Title", result.metricGraphMultiLine.Title)
+        assert.Equal(t, "mm", result.metricGraphMultiLine.Values.Unit)
+        assert.Equal(t, 30, result.metricGraphMultiLine.Values.ReloadTime)
+        assert.Equal(t, "5m", result.metricGraphMultiLine.Values.DefaultInterval)
+        assert.Equal(t, int64(1625826953), result.metricGraphMultiLine.Values.TimeStamp)
+        assert.Equal(t, []string{"5m", "1d", "1w"}, result.metricGraphMultiLine.Values.Intervals)
+        assert.Equal(t, []int{1, 2, 3}, result.metricGraphMultiLine.Values.X)
+        assert.Equal(t, 7, result.metricGraphMultiLine.Values.Request)
 
-    // Verify the structure of the result
-    assert.Equal(t, "multiline", result.Type)
-    assert.Equal(t, "Title", result.Title)
-
-    // Verify the values
-    values := result.Values
-    assert.Equal(t, "mm", values.Unit)
-    assert.Equal(t, 30, values.ReloadTime)
-    assert.Equal(t, "5m", values.DefaultInterval)
-    assert.NotEmpty(t, values.TimeStamp)
-    assert.NotEmpty(t, values.Intervals)
-    assert.NotEmpty(t, values.X)
-    assert.NotEmpty(t, values.Y)
-    assert.Equal(t, 7, values.Request)
+        y := result.metricGraphMultiLine.Values.Y
+        assert.Len(t, y, 2)
+        assert.Equal(t, []int{10, 20, 30}, y[0].Value)
+        assert.Equal(t, []int{40, 50, 60}, y[1].Value)
+    } else {
+        t.Fatal("Result is nil, expected valid MetricGraphMultiLineRepositoryDb")
+    }
 }
