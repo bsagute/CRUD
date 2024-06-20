@@ -1,110 +1,95 @@
 package db_test
 
 import (
-    "encoding/json"
-    "io/ioutil"
-    "os"
     "testing"
-
     "github.com/stretchr/testify/assert"
+    "github.com/google/uuid"
     "gorm.io/driver/postgres"
     "gorm.io/gorm"
     "my_project/db"    // Replace with the actual path to your db package
     "my_project/model" // Replace with the actual path to your model package
+    "github.com/DATA-DOG/go-sqlmock"
 )
 
-func TestNewAppComponentRepositoryDbLevelOne(t *testing.T) {
-    // Create a temporary JSON file with mock data
-    mockData := `{
-        "ID": "test_id",
-        "Name": "Test Component"
-    }`
-    tmpFile, err := ioutil.TempFile(os.TempDir(), "test_*.json")
-    assert.NoError(t, err)
-    defer os.Remove(tmpFile.Name())
-
-    _, err = tmpFile.Write([]byte(mockData))
-    assert.NoError(t, err)
-    tmpFile.Close()
-
-    // Modify the function to read from the temporary file
-    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
-    newFilePath := tmpFile.Name()
-
-    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
-    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
-    os.Rename(newFilePath, originalFilePath)
-
-    // Open a new GORM DB connection using a mocked database
-    dbMock, _, err := sqlmock.New()
+func TestGetBreadCumb(t *testing.T) {
+    // Create a new sqlmock database connection and a mock object
+    dbMock, mock, err := sqlmock.New()
     assert.NoError(t, err)
     defer dbMock.Close()
 
+    // Open a new GORM DB connection using the mock database
     gdb, err := gorm.Open(postgres.New(postgres.Config{
         Conn: dbMock,
     }), &gorm.Config{})
     assert.NoError(t, err)
 
-    // Call the function
-    result := db.NewAppComponentRepositoryDbLevelOne(gdb)
+    // Initialize navigation slice
+    navigation := []model.EntityInfo{}
 
-    // Verify the results
-    assert.Equal(t, "test_id", result.appinfo.ID)
-    assert.Equal(t, "Test Component", result.appinfo.Name)
-    assert.NotNil(t, result.getGorm)
-}
+    // Test case: Entity type is "framework"
+    t.Run("EntityTypeFramework", func(t *testing.T) {
+        entityID := uuid.New()
+        mockEntityData := model.EntityInfo{
+            EntityId:   entityID,
+            EntityType: "framework",
+        }
 
-func TestNewAppComponentRepositoryDbLevelOne_FileError(t *testing.T) {
-    // Open a new GORM DB connection using a mocked database
-    dbMock, _, err := sqlmock.New()
-    assert.NoError(t, err)
-    defer dbMock.Close()
+        // Mock the database query
+        mock.ExpectQuery(`SELECT \* FROM "entity_info" WHERE "entity_info"."entity_id" = \$1 ORDER BY "entity_info"."entity_id" LIMIT 1`).
+            WithArgs(entityID).
+            WillReturnRows(sqlmock.NewRows([]string{"entity_id", "entity_type"}).
+                AddRow(mockEntityData.EntityId, mockEntityData.EntityType))
 
-    gdb, err := gorm.Open(postgres.New(postgres.Config{
-        Conn: dbMock,
-    }), &gorm.Config{})
-    assert.NoError(t, err)
+        // Call the function
+        resultNavigation, resultLen := db.GetBreadCumb(entityID, navigation, gdb)
 
-    // Temporarily rename the JSON file to simulate file read error
-    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
-    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
-    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
-
-    assert.PanicsWithError(t, "json file error open ./pkg/jsondata/app_component_details_level_0.json: no such file or directory", func() {
-        db.NewAppComponentRepositoryDbLevelOne(gdb)
+        // Verify the results
+        assert.Equal(t, 1, resultLen)
+        assert.Equal(t, mockEntityData, resultNavigation[0])
     })
-}
 
-func TestNewAppComponentRepositoryDbLevelOne_UnmarshalError(t *testing.T) {
-    // Create a temporary JSON file with invalid data
-    invalidData := `{invalid_json}`
-    tmpFile, err := ioutil.TempFile(os.TempDir(), "test_invalid_*.json")
-    assert.NoError(t, err)
-    defer os.Remove(tmpFile.Name())
+    // Test case: Entity type is not "framework"
+    t.Run("EntityTypeNotFramework", func(t *testing.T) {
+        entityID := uuid.New()
+        mockEntityData := model.EntityInfo{
+            EntityId:      entityID,
+            EntityType:    "other",
+            ParentEntityId: uuid.New(),
+        }
 
-    _, err = tmpFile.Write([]byte(invalidData))
-    assert.NoError(t, err)
-    tmpFile.Close()
+        // Mock the database query
+        mock.ExpectQuery(`SELECT \* FROM "entity_info" WHERE "entity_info"."entity_id" = \$1 ORDER BY "entity_info"."entity_id" LIMIT 1`).
+            WithArgs(entityID).
+            WillReturnRows(sqlmock.NewRows([]string{"entity_id", "entity_type", "parent_entity_id"}).
+                AddRow(mockEntityData.EntityId, mockEntityData.EntityType, mockEntityData.ParentEntityId))
 
-    // Modify the function to read from the temporary file
-    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
-    newFilePath := tmpFile.Name()
+        // Mock the recursive call
+        db.GetBreadCumb = func(entityID uuid.UUID, navigation []model.EntityInfo, getGorm *gorm.DB) ([]model.EntityInfo, int) {
+            return append([]model.EntityInfo{mockEntityData}, navigation...), 1
+        }
 
-    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
-    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
-    os.Rename(newFilePath, originalFilePath)
+        // Call the function
+        resultNavigation, resultLen := db.GetBreadCumb(entityID, navigation, gdb)
 
-    // Open a new GORM DB connection using a mocked database
-    dbMock, _, err := sqlmock.New()
-    assert.NoError(t, err)
-    defer dbMock.Close()
+        // Verify the results
+        assert.Equal(t, 1, resultLen)
+        assert.Equal(t, mockEntityData, resultNavigation[0])
+    })
 
-    gdb, err := gorm.Open(postgres.New(postgres.Config{
-        Conn: dbMock,
-    }), &gorm.Config{})
-    assert.NoError(t, err)
+    // Test case: Error in database query
+    t.Run("DatabaseQueryError", func(t *testing.T) {
+        entityID := uuid.New()
 
-    assert.PanicsWithError(t, "json unmarshal error invalid character 'i' looking for beginning of object key string", func() {
-        db.NewAppComponentRepositoryDbLevelOne(gdb)
+        // Mock the database query to return an error
+        mock.ExpectQuery(`SELECT \* FROM "entity_info" WHERE "entity_info"."entity_id" = \$1 ORDER BY "entity_info"."entity_id" LIMIT 1`).
+            WithArgs(entityID).
+            WillReturnError(errors.New("database query error"))
+
+        // Call the function
+        resultNavigation, resultLen := db.GetBreadCumb(entityID, navigation, gdb)
+
+        // Verify the results
+        assert.Equal(t, 0, resultLen)
+        assert.Empty(t, resultNavigation)
     })
 }
