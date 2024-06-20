@@ -1,11 +1,11 @@
 package db_test
 
 import (
-    "errors"
-    "net/url"
+    "encoding/json"
+    "io/ioutil"
+    "os"
     "testing"
 
-    "github.com/DATA-DOG/go-sqlmock"
     "github.com/stretchr/testify/assert"
     "gorm.io/driver/postgres"
     "gorm.io/gorm"
@@ -13,75 +13,98 @@ import (
     "my_project/model" // Replace with the actual path to your model package
 )
 
-func TestFindAllAppComp(t *testing.T) {
-    // Create a new sqlmock database connection and a mock object
-    dbMock, mock, err := sqlmock.New()
+func TestNewAppComponentRepositoryDbLevelOne(t *testing.T) {
+    // Create a temporary JSON file with mock data
+    mockData := `{
+        "ID": "test_id",
+        "Name": "Test Component"
+    }`
+    tmpFile, err := ioutil.TempFile(os.TempDir(), "test_*.json")
+    assert.NoError(t, err)
+    defer os.Remove(tmpFile.Name())
+
+    _, err = tmpFile.Write([]byte(mockData))
+    assert.NoError(t, err)
+    tmpFile.Close()
+
+    // Modify the function to read from the temporary file
+    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
+    newFilePath := tmpFile.Name()
+
+    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
+    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
+    os.Rename(newFilePath, originalFilePath)
+
+    // Open a new GORM DB connection using a mocked database
+    dbMock, _, err := sqlmock.New()
     assert.NoError(t, err)
     defer dbMock.Close()
 
-    // Open a new GORM DB connection using the mock database
     gdb, err := gorm.Open(postgres.New(postgres.Config{
         Conn: dbMock,
     }), &gorm.Config{})
     assert.NoError(t, err)
 
-    // Initialize the repository with the mocked GORM DB
-    repo := db.AppComponentRepositoryDb{
-        getGorm: gdb,
-    }
+    // Call the function
+    result := db.NewAppComponentRepositoryDbLevelOne(gdb)
 
-    // Positive Case: Valid app_id
-    t.Run("ValidAppID", func(t *testing.T) {
-        values := url.Values{}
-        values.Set("app_id", "valid_app_id")
+    // Verify the results
+    assert.Equal(t, "test_id", result.appinfo.ID)
+    assert.Equal(t, "Test Component", result.appinfo.Name)
+    assert.NotNil(t, result.getGorm)
+}
 
-        // Mock the getNewLayoutData function
-        db.GetNewLayoutData = func(appID string, gormDB *gorm.DB) (model.AppComponent, error) {
-            return model.AppComponent{
-                ID: appID,
-            }, nil
-        }
+func TestNewAppComponentRepositoryDbLevelOne_FileError(t *testing.T) {
+    // Open a new GORM DB connection using a mocked database
+    dbMock, _, err := sqlmock.New()
+    assert.NoError(t, err)
+    defer dbMock.Close()
 
-        // Call the function
-        result, err := repo.FindAllAppComp(&values)
-        assert.NoError(t, err)
-        assert.NotNil(t, result)
-        assert.Equal(t, "valid_app_id", result.ID)
+    gdb, err := gorm.Open(postgres.New(postgres.Config{
+        Conn: dbMock,
+    }), &gorm.Config{})
+    assert.NoError(t, err)
+
+    // Temporarily rename the JSON file to simulate file read error
+    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
+    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
+    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
+
+    assert.PanicsWithError(t, "json file error open ./pkg/jsondata/app_component_details_level_0.json: no such file or directory", func() {
+        db.NewAppComponentRepositoryDbLevelOne(gdb)
     })
+}
 
-    // Positive Case: Valid component_id
-    t.Run("ValidComponentID", func(t *testing.T) {
-        values := url.Values{}
-        values.Set("component_id", "valid_component_id")
+func TestNewAppComponentRepositoryDbLevelOne_UnmarshalError(t *testing.T) {
+    // Create a temporary JSON file with invalid data
+    invalidData := `{invalid_json}`
+    tmpFile, err := ioutil.TempFile(os.TempDir(), "test_invalid_*.json")
+    assert.NoError(t, err)
+    defer os.Remove(tmpFile.Name())
 
-        // Mock the getNewLayoutData function
-        db.GetNewLayoutData = func(appID string, gormDB *gorm.DB) (model.AppComponent, error) {
-            return model.AppComponent{
-                ID: appID,
-            }, nil
-        }
+    _, err = tmpFile.Write([]byte(invalidData))
+    assert.NoError(t, err)
+    tmpFile.Close()
 
-        // Call the function
-        result, err := repo.FindAllAppComp(&values)
-        assert.NoError(t, err)
-        assert.NotNil(t, result)
-        assert.Equal(t, "valid_component_id", result.ID)
-    })
+    // Modify the function to read from the temporary file
+    originalFilePath := "./pkg/jsondata/app_component_details_level_0.json"
+    newFilePath := tmpFile.Name()
 
-    // Negative Case: Error in getNewLayoutData
-    t.Run("GetNewLayoutDataError", func(t *testing.T) {
-        values := url.Values{}
-        values.Set("app_id", "error_app_id")
+    os.Rename(originalFilePath, originalFilePath+".bak") // Backup original file
+    defer os.Rename(originalFilePath+".bak", originalFilePath) // Restore original file after test
+    os.Rename(newFilePath, originalFilePath)
 
-        // Mock the getNewLayoutData function to return an error
-        db.GetNewLayoutData = func(appID string, gormDB *gorm.DB) (model.AppComponent, error) {
-            return model.AppComponent{}, errors.New("data retrieval error")
-        }
+    // Open a new GORM DB connection using a mocked database
+    dbMock, _, err := sqlmock.New()
+    assert.NoError(t, err)
+    defer dbMock.Close()
 
-        // Call the function
-        result, err := repo.FindAllAppComp(&values)
-        assert.Error(t, err)
-        assert.EqualError(t, err, "data retrieval error")
-        assert.Equal(t, model.AppComponent{}, result)
+    gdb, err := gorm.Open(postgres.New(postgres.Config{
+        Conn: dbMock,
+    }), &gorm.Config{})
+    assert.NoError(t, err)
+
+    assert.PanicsWithError(t, "json unmarshal error invalid character 'i' looking for beginning of object key string", func() {
+        db.NewAppComponentRepositoryDbLevelOne(gdb)
     })
 }
