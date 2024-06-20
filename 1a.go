@@ -1,38 +1,66 @@
-package db_test
+package main
 
 import (
-    "testing"
-
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/require"
-    "github.com/stretchr/testify/mock"
-    
-    "github.com/path/to/your/project/db" // Update this path to the actual import path of your project
-    "github.com/path/to/your/project/pkg/model"
+	"strconv"
+	"testing"
 )
 
-// Mock the dependencies if needed (like gorm.DB). If not needed, you can remove this part.
-type MockDB struct {
-    mock.Mock
+// Assuming the model package and AppComponentLayout type are defined as below
+package model
+
+type AppComponentLayout struct {
+	SortValue int
 }
 
-func (m *MockDB) GetItsmMetric() (model.ItsmMetric, error) {
-    args := m.Called()
-    return args.Get(0).(model.ItsmMetric), args.Error(1)
+func sortIndex(containers []model.AppComponentLayout, sort string) int {
+	sortValue, err := strconv.Atoi(sort)
+	if err != nil {
+		return len(containers) // in case sort is not present
+	}
+
+	for i, graphType := range containers {
+		existingSortValue := graphType.SortValue
+		if int64(sortValue) < existingSortValue {
+			return i
+		}
+	}
+	return len(containers)
 }
 
-func TestGetItsmMetric(t *testing.T) {
-    // Create a new instance of the ItsmMetricRepositoryDb with any mocked dependencies
-    repository := db.ItsmMetricRepositoryDb{
-        getGorm: &MockDB{},
-    }
+func TestSortIndex(t *testing.T) {
+	tests := []struct {
+		containers []model.AppComponentLayout
+		sort       string
+		expected   int
+	}{
+		{
+			containers: []model.AppComponentLayout{{SortValue: 2}, {SortValue: 4}, {SortValue: 6}},
+			sort:       "5",
+			expected:   2,
+		},
+		{
+			containers: []model.AppComponentLayout{{SortValue: 2}, {SortValue: 4}, {SortValue: 6}},
+			sort:       "1",
+			expected:   0,
+		},
+		{
+			containers: []model.AppComponentLayout{{SortValue: 2}, {SortValue: 4}, {SortValue: 6}},
+			sort:       "7",
+			expected:   3,
+		},
+		{
+			containers: []model.AppComponentLayout{{SortValue: 2}, {SortValue: 4}, {SortValue: 6}},
+			sort:       "abc",
+			expected:   3,
+		},
+	}
 
-    expectedItsmMetric := model.ItsmMetric{
-        Type: "itsm-metric",
-    }
-
-    it, err := repository.GetItsmMetric()
-
-    require.NoError(t, err)
-    assert.Equal(t, expectedItsmMetric, it)
+	for _, tt := range tests {
+		t.Run(tt.sort, func(t *testing.T) {
+			result := sortIndex(tt.containers, tt.sort)
+			if result != tt.expected {
+				t.Errorf("sortIndex(%v, %s) = %d; expected %d", tt.containers, tt.sort, result, tt.expected)
+			}
+		})
+	}
 }
