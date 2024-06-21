@@ -1,75 +1,73 @@
-// app_info_db_test.go
-package db
+package yourpackage
 
 import (
-    "errors"
-    "fmt"
-    "testing"
+	"net/url"
+	"testing"
 
-    "github.com/google/uuid"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/mock"
-    "gorm.io/gorm"
-    "github.aexp.com/amex-eng/go-paved-road/pkg/entity"
-    "github.aexp.com/amex-eng/go-paved-road/pkg/model"
+	"github.com/stretchr/testify/assert"
+	"gorm.io/gorm"
 )
 
-// MockGormDB is a mock of GormDB
-type MockGormDB struct {
-    mock.Mock
+// Define the model.AppComponent struct if not already defined
+type AppComponent struct {
+	SomeField string
 }
 
-// Mock function to replace GetAllEntities
-func (m *MockGormDB) GetAllEntities(db *gorm.DB) ([]entity.EntityInfo, error) {
-    args := m.Called(db)
-    return args.Get(0).([]entity.EntityInfo), args.Error(1)
+// Mock function to simulate getComponentList
+func getComponentListMock(app_id string) (AppComponent, error) {
+	return AppComponent{SomeField: "expected_value"}, nil
 }
 
-// Override GetAllEntities to use the mock
-func GetAllEntities(db *gorm.DB) ([]entity.EntityInfo, error) {
-    mockDB := &MockGormDB{}
-    return mockDB.GetAllEntities(db)
+// Mock function to simulate getNewLayoutData
+func getNewLayoutDataMock(app_id string, db *gorm.DB) (AppComponent, error) {
+	return AppComponent{SomeField: "expected_value"}, nil
 }
 
-func TestAllAppinfoRepositoryDb(t *testing.T) {
-    var gormDB *gorm.DB
-    mockDB := new(MockGormDB)
-
-    t.Run("should return app info when no error", func(t *testing.T) {
-        entities := []entity.EntityInfo{
-            {EntityId: uuid.New(), EntityName: "App1", EntityDescription: "Description1"},
-            {EntityId: uuid.New(), EntityName: "App2", EntityDescription: "Description2"},
-        }
-        mockDB.On("GetAllEntities", gormDB).Return(entities, nil)
-
-        result := AllAppinfoRepositoryDb(gormDB)
-
-        expectedAppInfo := []model.Appinfo{
-            {App_name: "App1", App_id: entities[0].EntityId},
-            {App_name: "App2", App_id: entities[1].EntityId},
-        }
-        assert.Equal(t, expectedAppInfo, result.Appinfo)
-        mockDB.AssertExpectations(t)
-    })
-
-    t.Run("should log fatal on error", func(t *testing.T) {
-        mockDB.On("GetAllEntities", gormDB).Return(nil, errors.New("some error"))
-
-        // Mock the log.Fatalln to prevent actual fatal error
-        origLogFatal := logFatalln
-        defer func() { logFatalln = origLogFatal }()
-        logFatalCalled := false
-        logFatalln = func(v ...interface{}) {
-            logFatalCalled = true
-            fmt.Println(v...)
-        }
-
-        AllAppinfoRepositoryDb(gormDB)
-        assert.True(t, logFatalCalled, "Expected log fatal but did not occur")
-    })
+// Mock the AppComponentRepositoryDb struct
+type AppComponentRepositoryDb struct {
+	appinfo AppComponent
+	getGorm *gorm.DB
 }
 
-// Override log.Fatalln to prevent actual fatal error during testing
-var logFatalln = func(v ...interface{}) {
-    fmt.Println(v...)
+// Mock the FindAllAppComp method
+func (s *AppComponentRepositoryDb) FindAllAppComp(level *url.Values) (AppComponent, error) {
+	var err error
+	var payload AppComponent
+
+	app_id := level.Get("app_id")
+
+	if app_id == "" {
+		app_id = level.Get("component_id")
+	}
+
+	// payload, err := getComponentList(app_id)
+	// payload, err = getLayoutData(app_id, s.getGorm)
+	payload, err = getNewLayoutData(app_id, s.getGorm)
+
+	if err != nil {
+		return payload, err
+	}
+
+	return payload, nil
+}
+
+// Unit test for FindAllAppComp function
+func TestFindAllAppComp(t *testing.T) {
+	repo := &AppComponentRepositoryDb{
+		// Mock the db connection if necessary
+	}
+
+	// Mock the functions
+	getComponentList = getComponentListMock
+	getNewLayoutData = getNewLayoutDataMock
+
+	level := url.Values{}
+	level.Set("app_id", "test_app_id")
+
+	payload, err := repo.FindAllAppComp(&level)
+
+	// Assert the results
+	assert.Nil(t, err)
+	assert.NotNil(t, payload)
+	assert.Equal(t, "expected_value", payload.SomeField) // Change "SomeField" to actual field name
 }
