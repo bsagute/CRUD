@@ -1,73 +1,63 @@
-package yourpackage
+package db_test
 
 import (
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
+	"net/http"
+	"net/http/httptest"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"slices"
+	"strings"
 )
 
-// Define the model.AppComponent struct if not already defined
-type AppComponent struct {
+// Mock the model.Applist struct if not already defined
+type Applist struct {
+	// Define fields according to your actual model
 	SomeField string
 }
 
-// Mock function to simulate getComponentList
-func getComponentListMock(app_id string) (AppComponent, error) {
-	return AppComponent{SomeField: "expected_value"}, nil
+// Mock function to simulate getApplistData
+func getApplistDataMock(db *gorm.DB) (Applist, error) {
+	return Applist{SomeField: "expected_value"}, nil
 }
 
-// Mock function to simulate getNewLayoutData
-func getNewLayoutDataMock(app_id string, db *gorm.DB) (AppComponent, error) {
-	return AppComponent{SomeField: "expected_value"}, nil
-}
-
-// Mock the AppComponentRepositoryDb struct
-type AppComponentRepositoryDb struct {
-	appinfo AppComponent
+// Mock the ApplistRepositoryDb struct
+type ApplistRepositoryDb struct {
+	appinfo Applist
 	getGorm *gorm.DB
 }
 
-// Mock the FindAllAppComp method
-func (s *AppComponentRepositoryDb) FindAllAppComp(level *url.Values) (AppComponent, error) {
-	var err error
-	var payload AppComponent
-
-	app_id := level.Get("app_id")
-
-	if app_id == "" {
-		app_id = level.Get("component_id")
-	}
-
-	// payload, err := getComponentList(app_id)
-	// payload, err = getLayoutData(app_id, s.getGorm)
-	payload, err = getNewLayoutData(app_id, s.getGorm)
+// Implement the FindAllComp method
+func (s *ApplistRepositoryDb) FindAllComp() (Applist, error) {
+	var entityList Applist
+	entityList, err := getApplistData(s.getGorm)
 
 	if err != nil {
-		return payload, err
+		log.Printf("Error %s", err.Error())
+		return entityList, err
 	}
 
-	return payload, nil
+	return entityList, nil
 }
 
-// Unit test for FindAllAppComp function
-func TestFindAllAppComp(t *testing.T) {
-	repo := &AppComponentRepositoryDb{
+// Unit test for FindAllComp function
+func TestFindAllComp(t *testing.T) {
+	repo := &ApplistRepositoryDb{
 		// Mock the db connection if necessary
 	}
 
-	// Mock the functions
-	getComponentList = getComponentListMock
-	getNewLayoutData = getNewLayoutDataMock
+	// Mock the function
+	getApplistData = getApplistDataMock
 
-	level := url.Values{}
-	level.Set("app_id", "test_app_id")
-
-	payload, err := repo.FindAllAppComp(&level)
+	entityList, err := repo.FindAllComp()
 
 	// Assert the results
 	assert.Nil(t, err)
-	assert.NotNil(t, payload)
-	assert.Equal(t, "expected_value", payload.SomeField) // Change "SomeField" to actual field name
+	assert.NotNil(t, entityList)
+	assert.Equal(t, "expected_value", entityList.SomeField) // Change "SomeField" to actual field name
 }
