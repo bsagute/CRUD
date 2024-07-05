@@ -1,63 +1,84 @@
-package db_test
+package main
 
 import (
-	"testing"
+    "context"
+    "fmt"
+    "net/http"
+    "time"
 
-	"github.com/stretchr/testify/assert"
-	"gorm.io/gorm"
-	"net/http"
-	"net/http/httptest"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"log"
-	"slices"
-	"strings"
+    "github.com/hashicorp/go-retryablehttp"
+    "golang.org/x/oauth2"
 )
 
-// Mock the model.Applist struct if not already defined
-type Applist struct {
-	// Define fields according to your actual model
-	SomeField string
+// Client represents an HTTP client with a timeout
+type Client struct {
+    HTTPClient *http.Client
+    timeout    time.Duration
 }
 
-// Mock function to simulate getApplistData
-func getApplistDataMock(db *gorm.DB) (Applist, error) {
-	return Applist{SomeField: "expected_value"}, nil
+// ClientOption defines a function type for setting client options
+type ClientOption func(*Client)
+
+// defaultClient returns a standard HTTP client with the given timeout
+func defaultClient(timeout time.Duration) *http.Client {
+    return &http.Client{
+        Timeout: timeout,
+    }
 }
 
-// Mock the ApplistRepositoryDb struct
-type ApplistRepositoryDb struct {
-	appinfo Applist
-	getGorm *gorm.DB
+// passthroughErrorHandler is a basic error handler for retryablehttp
+func passthroughErrorHandler(resp *http.Response, err error, numTries int) (*http.Response, error) {
+    // Log each retry attempt
+    fmt.Printf("Attempt %d: Error %v\n", numTries, err)
+    return resp, err
 }
 
-// Implement the FindAllComp method
-func (s *ApplistRepositoryDb) FindAllComp() (Applist, error) {
-	var entityList Applist
-	entityList, err := getApplistData(s.getGorm)
+// initHTTP initializes a retryable HTTP client with the given retry max and logger
+func initHTTP(retryMax int, leveledLogger retryablehttp.LeveledLogger) ClientOption {
+    return func(c *Client) {
+        // Create a new retryable HTTP client
+        retryableHTTPClient := retryablehttp.NewClient()
+        retryableHTTPClient.HTTPClient = defaultClient(c.timeout) // Initialize with default client
 
-	if err != nil {
-		log.Printf("Error %s", err.Error())
-		return entityList, err
-	}
+        // Set retry max and logger
+        retryableHTTPClient.RetryMax = retryMax
+        retryableHTTPClient.Logger = leveledLogger
 
-	return entityList, nil
+        // Set the error handler
+        retryableHTTPClient.ErrorHandler = passthroughErrorHandler
+        fmt.Printf("== HTTPCLIENT passthroughErrorHandler.retryMax: %d\n", retryMax)
+
+        // Assign the retryable client to the main client
+        c.HTTPClient = retryableHTTPClient.StandardClient()
+        c.HTTPClient.Timeout = c.timeout
+    }
 }
 
-// Unit test for FindAllComp function
-func TestFindAllComp(t *testing.T) {
-	repo := &ApplistRepositoryDb{
-		// Mock the db connection if necessary
-	}
+func main() {
+    // Initialize the main client with a timeout
+    client := &Client{
+        timeout: 10 * time.Second,
+    }
 
-	// Mock the function
-	getApplistData = getApplistDataMock
+    // Apply the retryable HTTP client option
+    option := initHTTP(3, retryablehttp.NewLogger(retryablehttp.INFO))
+    option(client)
 
-	entityList, err := repo.FindAllComp()
+    // Create a new request
+    req, err := retryablehttp.NewRequest("GET", "https://example.com", nil)
+    if err != nil {
+        fmt.Printf("Error creating request: %v\n", err)
+        return
+    }
 
-	// Assert the results
-	assert.Nil(t, err)
-	assert.NotNil(t, entityList)
-	assert.Equal(t, "expected_value", entityList.SomeField) // Change "SomeField" to actual field name
+    // Perform the request using the retryable HTTP client
+    resp, err := client.HTTPClient.Do(req)
+    if err != nil {
+        fmt.Printf("Request failed: %v\n", err)
+        return
+    }
+    defer resp.Body.Close()
+
+    // Print the status of the response
+    fmt.Println("Request succeeded with status:", resp.Status)
 }
