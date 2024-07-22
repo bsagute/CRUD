@@ -1,79 +1,133 @@
-package api
+package main
 
 import (
-	"errors"
-	"net/url"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/your/repository/model"
 )
 
-// Mock for the AppinfoRepository
-type MockAppinfoRepository struct {
+// MockApplistRepository is a mock of ApplistRepository interface
+type MockApplistRepository struct {
 	mock.Mock
 }
 
-func (m *MockAppinfoRepository) FindAll(params *url.Values) ([]model.Appinfo, error) {
-	args := m.Called(params)
-	return args.Get(0).([]model.Appinfo), args.Error(1)
+func (m *MockApplistRepository) FindAllComp() (model.Applist, error) {
+	args := m.Called()
+	return args.Get(0).(model.Applist), args.Error(1)
 }
 
-func TestGetAllAppInfo(t *testing.T) {
-	mockRepo := new(MockAppinfoRepository)
-	api := NewAppinfoApi(mockRepo)
+func (m *MockApplistRepository) FindServiceMapData(serviceId string) ([]model.ServiceInfoRes, error) {
+	args := m.Called(serviceId)
+	return args.Get(0).([]model.ServiceInfoRes), args.Error(1)
+}
 
-	params := &url.Values{}
-	expectedResult := []model.Appinfo{
-		{
-			App_id:         uuid.New(),
-			App_name:       "App1",
-			App_type:       "Type1",
-			App_description: "Description1",
-			Components:     nil,
-			Metricinfo:     nil,
-		},
-		{
-			App_id:         uuid.New(),
-			App_name:       "App2",
-			App_type:       "Type2",
-			App_description: "Description2",
-			Components:     nil,
-			Metricinfo:     nil,
-		},
-	}
+func (m *MockApplistRepository) FindMetricsMetadata(requestedEntityId string, entityTypes []string) (model.MetricMetadataResponse, error) {
+	args := m.Called(requestedEntityId, entityTypes)
+	return args.Get(0).(model.MetricMetadataResponse), args.Error(1)
+}
 
-	// Setting up expectations
-	mockRepo.On("FindAll", params).Return(expectedResult, nil)
+func (m *MockApplistRepository) CheckServiceMapByServiceId(serviceId string) (model.ServiceInfo, error) {
+	args := m.Called(serviceId)
+	return args.Get(0).(model.ServiceInfo), args.Error(1)
+}
 
-	// Call the method
-	result, err := api.GetAllAppInfo(params)
+func (m *MockApplistRepository) FindJourneyDetails(params entity.JourneyParams) (entity.JourneyItsmDetailsRes, error) {
+	args := m.Called(params)
+	return args.Get(0).(entity.JourneyItsmDetailsRes), args.Error(1)
+}
 
-	// Assert the expectations
-	assert.Nil(t, err)
+func (m *MockApplistRepository) FindJourneyList() ([]entity.JourneyListRes, error) {
+	args := m.Called()
+	return args.Get(0).([]entity.JourneyListRes), args.Error(1)
+}
+
+// NewApplistApi creates a new instance of DefaultApplistApi
+func NewApplistApi(repository model.ApplistRepository) *DefaultApplistApi {
+	return &DefaultApplistApi{repo: repository}
+}
+
+// Test cases
+
+func TestGetAllAppComp(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	expectedResult := model.Applist{ /* initialize with some data */ }
+	mockRepo.On("FindAllComp").Return(expectedResult, nil)
+
+	api := NewApplistApi(mockRepo)
+	result, err := api.GetAllAppComp()
+
+	assert.NoError(t, err)
 	assert.Equal(t, expectedResult, result)
-
 	mockRepo.AssertExpectations(t)
 }
 
-func TestGetAllAppInfo_Error(t *testing.T) {
-	mockRepo := new(MockAppinfoRepository)
-	api := NewAppinfoApi(mockRepo)
+func TestGetServiceMapData(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	serviceId := "test-service-id"
+	expectedResult := []model.ServiceInfoRes{ /* initialize with some data */ }
+	mockRepo.On("FindServiceMapData", serviceId).Return(expectedResult, nil)
 
-	params := &url.Values{}
-	expectedError := errors.New("some error")
+	api := NewApplistApi(mockRepo)
+	result, err := api.GetServiceMapData(serviceId)
 
-	// Setting up expectations
-	mockRepo.On("FindAll", params).Return(nil, expectedError)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockRepo.AssertExpectations(t)
+}
 
-	// Call the method
-	result, err := api.GetAllAppInfo(params)
+func TestGetMetricsMetadata(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	requestedEntityId := "test-entity-id"
+	entityTypes := []string{"type1", "type2"}
+	expectedResult := model.MetricMetadataResponse{ /* initialize with some data */ }
+	mockRepo.On("FindMetricsMetadata", requestedEntityId, entityTypes).Return(expectedResult, nil)
 
-	// Assert the expectations
-	assert.Nil(t, result)
-	assert.Equal(t, expectedError, err)
+	api := NewApplistApi(mockRepo)
+	result, err := api.GetMetricsMetadata(requestedEntityId, entityTypes)
 
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestCheckServiceMap(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	serviceId := "test-service-id"
+	expectedResult := model.ServiceInfo{ /* initialize with some data */ }
+	mockRepo.On("CheckServiceMapByServiceId", serviceId).Return(expectedResult, nil)
+
+	api := NewApplistApi(mockRepo)
+	result, err := api.CheckServiceMap(serviceId)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetJourneyDetails(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	params := entity.JourneyParams{ /* initialize with some data */ }
+	expectedResult := entity.JourneyItsmDetailsRes{ /* initialize with some data */ }
+	mockRepo.On("FindJourneyDetails", params).Return(expectedResult, nil)
+
+	api := NewApplistApi(mockRepo)
+	result, err := api.GetJourneyDetails(params)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestGetJourneyList(t *testing.T) {
+	mockRepo := new(MockApplistRepository)
+	expectedResult := []entity.JourneyListRes{ /* initialize with some data */ }
+	mockRepo.On("FindJourneyList").Return(expectedResult, nil)
+
+	api := NewApplistApi(mockRepo)
+	result, err := api.GetJourneyList()
+
+	assert.NoError(t, err)
+	assert.Equal(t, expectedResult, result)
 	mockRepo.AssertExpectations(t)
 }
