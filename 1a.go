@@ -1,13 +1,15 @@
-package main
+package api_test
 
 import (
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/your_module_path/api"
+	"github.com/your_module_path/entity"
+	"github.com/your_module_path/model"
 )
 
-// MockApplistRepository is a mock of ApplistRepository interface
+// MockApplistRepository is a mock of the ApplistRepository interface
 type MockApplistRepository struct {
 	mock.Mock
 }
@@ -27,14 +29,14 @@ func (m *MockApplistRepository) FindMetricsMetadata(requestedEntityId string, en
 	return args.Get(0).(model.MetricMetadataResponse), args.Error(1)
 }
 
-func (m *MockApplistRepository) CheckServiceMapByServiceId(serviceId string) (model.ServiceInfo, error) {
+func (m *MockApplistRepository) CheckServiceMapByServiceId(serviceId string) (*model.ServiceInfo, error) {
 	args := m.Called(serviceId)
-	return args.Get(0).(model.ServiceInfo), args.Error(1)
+	return args.Get(0).(*model.ServiceInfo), args.Error(1)
 }
 
-func (m *MockApplistRepository) FindJourneyDetails(params entity.JourneyParams) (entity.JourneyItsmDetailsRes, error) {
+func (m *MockApplistRepository) FindJourneyDetails(params entity.JourneyParams) ([]entity.JourneyItsmDetailsRes, error) {
 	args := m.Called(params)
-	return args.Get(0).(entity.JourneyItsmDetailsRes), args.Error(1)
+	return args.Get(0).([]entity.JourneyItsmDetailsRes), args.Error(1)
 }
 
 func (m *MockApplistRepository) FindJourneyList() ([]entity.JourneyListRes, error) {
@@ -43,11 +45,11 @@ func (m *MockApplistRepository) FindJourneyList() ([]entity.JourneyListRes, erro
 }
 
 // NewApplistApi creates a new instance of DefaultApplistApi
-func NewApplistApi(repository model.ApplistRepository) *DefaultApplistApi {
-	return &DefaultApplistApi{repo: repository}
+func NewApplistApi(repository model.ApplistRepository) *api.DefaultApplistApi {
+	return &api.DefaultApplistApi{Repo: repository}
 }
 
-// Test cases
+// Test functions
 
 func TestGetAllAppComp(t *testing.T) {
 	mockRepo := new(MockApplistRepository)
@@ -94,7 +96,7 @@ func TestGetMetricsMetadata(t *testing.T) {
 func TestCheckServiceMap(t *testing.T) {
 	mockRepo := new(MockApplistRepository)
 	serviceId := "test-service-id"
-	expectedResult := model.ServiceInfo{ /* initialize with some data */ }
+	expectedResult := &model.ServiceInfo{ /* initialize with some data */ }
 	mockRepo.On("CheckServiceMapByServiceId", serviceId).Return(expectedResult, nil)
 
 	api := NewApplistApi(mockRepo)
@@ -108,7 +110,7 @@ func TestCheckServiceMap(t *testing.T) {
 func TestGetJourneyDetails(t *testing.T) {
 	mockRepo := new(MockApplistRepository)
 	params := entity.JourneyParams{ /* initialize with some data */ }
-	expectedResult := entity.JourneyItsmDetailsRes{ /* initialize with some data */ }
+	expectedResult := []entity.JourneyItsmDetailsRes{ /* initialize with some data */ }
 	mockRepo.On("FindJourneyDetails", params).Return(expectedResult, nil)
 
 	api := NewApplistApi(mockRepo)
