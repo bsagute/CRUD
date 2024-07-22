@@ -1,109 +1,84 @@
-package db
+package main
 
 import (
-    "os"
-    "log"
+    "context"
+    "fmt"
+    "net/http"
+    "time"
+
+    "github.com/hashicorp/go-retryablehttp"
+    "golang.org/x/oauth2"
 )
 
-var readFile = os.ReadFile
-var logFatal = log.Fatal
+// Client represents an HTTP client with a timeout
+type Client struct {
+    HTTPClient *http.Client
+    timeout    time.Duration
+}
 
+// ClientOption defines a function type for setting client options
+type ClientOption func(*Client)
 
+// defaultClient returns a standard HTTP client with the given timeout
+func defaultClient(timeout time.Duration) *http.Client {
+    return &http.Client{
+        Timeout: timeout,
+    }
+}
 
-func NewMetricGraphMultiLineRepositoryDb(gormDb *gorm.DB) MetricGraphMultiLineRepositoryDb {
-    content, err := readFile("./pkg/jsondata/metric_multi_line.json")
+// passthroughErrorHandler is a basic error handler for retryablehttp
+func passthroughErrorHandler(resp *http.Response, err error, numTries int) (*http.Response, error) {
+    // Log each retry attempt
+    fmt.Printf("Attempt %d: Error %v\n", numTries, err)
+    return resp, err
+}
+
+// initHTTP initializes a retryable HTTP client with the given retry max and logger
+func initHTTP(retryMax int, leveledLogger retryablehttp.LeveledLogger) ClientOption {
+    return func(c *Client) {
+        // Create a new retryable HTTP client
+        retryableHTTPClient := retryablehttp.NewClient()
+        retryableHTTPClient.HTTPClient = defaultClient(c.timeout) // Initialize with default client
+
+        // Set retry max and logger
+        retryableHTTPClient.RetryMax = retryMax
+        retryableHTTPClient.Logger = leveledLogger
+
+        // Set the error handler
+        retryableHTTPClient.ErrorHandler = passthroughErrorHandler
+        fmt.Printf("== HTTPCLIENT passthroughErrorHandler.retryMax: %d\n", retryMax)
+
+        // Assign the retryable client to the main client
+        c.HTTPClient = retryableHTTPClient.StandardClient()
+        c.HTTPClient.Timeout = c.timeout
+    }
+}
+
+func main() {
+    // Initialize the main client with a timeout
+    client := &Client{
+        timeout: 10 * time.Second,
+    }
+
+    // Apply the retryable HTTP client option
+    option := initHTTP(3, retryablehttp.NewLogger(retryablehttp.INFO))
+    option(client)
+
+    // Create a new request
+    req, err := retryablehttp.NewRequest("GET", "https://example.com", nil)
     if err != nil {
-        logFatal("json file error", err)
+        fmt.Printf("Error creating request: %v\n", err)
+        return
     }
 
-    var metricGraphMultiLine model.MetricGraphMultiLine
-    errd := json.Unmarshal(content, &metricGraphMultiLine)
-    if errd != nil {
-        logFatal("json unmarshal error", errd)
+    // Perform the request using the retryable HTTP client
+    resp, err := client.HTTPClient.Do(req)
+    if err != nil {
+        fmt.Printf("Request failed: %v\n", err)
+        return
     }
+    defer resp.Body.Close()
 
-    return MetricGraphMultiLineRepositoryDb{metricGraphMultiLine, gormDb}
-}
-
-
-
-
-
-
-
-
-package db_test
-
-import (
-    "testing"
-    "log"
-
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/mock"
-    "yourproject/db" // Update this import path according to your project structure
-    "gorm.io/gorm"
-)
-
-// Mocking gorm.DB if needed
-type MockGormDB struct {
-    mock.Mock
-}
-
-// Mock readFile and logFatal functions
-var (
-    originalReadFile = db.readFile
-    originalLogFatal = db.logFatal
-)
-
-func TestNewMetricGraphMultiLineRepositoryDb(t *testing.T) {
-    defer func() {
-        db.readFile = originalReadFile
-        db.logFatal = originalLogFatal
-    }()
-
-    db.readFile = func(filename string) ([]byte, error) {
-        assert.Equal(t, "./pkg/jsondata/metric_multi_line.json", filename)
-        return []byte(`{
-            "type": "multiline",
-            "title": "Title",
-            "values": {
-                "unit": "mm",
-                "reloadTime": 30,
-                "defaultInterval": "5m",
-                "timeStamp": 1625826953,
-                "intervals": ["5m", "1d", "1w"],
-                "x": [1, 2, 3],
-                "y": [
-                    {"value": [10, 20, 30]},
-                    {"value": [40, 50, 60]}
-                ],
-                "request": 7
-            }
-        }`), nil
-    }
-
-    var logFatalCalled bool
-    db.logFatal = func(v ...interface{}) {
-        logFatalCalled = true
-    }
-
-    mockGormDB := new(MockGormDB)
-    result := db.NewMetricGraphMultiLineRepositoryDb(mockGormDB)
-
-    assert.False(t, logFatalCalled)
-    assert.NotNil(t, result)
-    assert.Equal(t, "multiline", result.metricGraphMultiLine.Type)
-    assert.Equal(t, "Title", result.metricGraphMultiLine.Title)
-    assert.Equal(t, "mm", result.metricGraphMultiLine.Values.Unit)
-    assert.Equal(t, 30, result.metricGraphMultiLine.Values.ReloadTime)
-    assert.Equal(t, "5m", result.metricGraphMultiLine.Values.DefaultInterval)
-    assert.Equal(t, int64(1625826953), result.metricGraphMultiLine.Values.TimeStamp)
-    assert.Equal(t, []string{"5m", "1d", "1w"}, result.metricGraphMultiLine.Values.Intervals)
-    assert.Equal(t, []int{1, 2, 3}, result.metricGraphMultiLine.Values.X)
-    assert.Equal(t, 7, result.metricGraphMultiLine.Values.Request)
-
-    y := result.metricGraphMultiLine.Values.Y
-    assert.Len(t, y, 2)
-    assert.Equal(t, []int{10, 20, 30}, y[0].Value)
-    assert.Equal(t, []int{40, 50, 60}, y[1].Value)
+    // Print the status of the response
+    fmt.Println("Request succeeded with status:", resp.Status)
 }
