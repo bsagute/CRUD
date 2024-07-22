@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,49 +9,50 @@ import (
 	"github.com/your_module_path/model"
 )
 
-// MockItsmMetricRepository is a mock of the ItsmMetricRepository interface
-type MockItsmMetricRepository struct {
+// MockMetricGaugeRepository is a mock of the MetricGaugeRepository interface
+type MockMetricGaugeRepository struct {
 	mock.Mock
 }
 
-func (m *MockItsmMetricRepository) GetItsmMetric() (model.ItsmMetric, error) {
-	args := m.Called()
-	return args.Get(0).(model.ItsmMetric), args.Error(1)
+func (m *MockMetricGaugeRepository) GetMetricGauge(queriesValue *url.Values) (model.MetricGauge, error) {
+	args := m.Called(queriesValue)
+	return args.Get(0).(model.MetricGauge), args.Error(1)
 }
 
-func (m *MockItsmMetricRepository) GetItsmMetricJson(graphRequest *model.GraphRequest) (model.ItsmMetric, error) {
-	args := m.Called(graphRequest)
-	return args.Get(0).(model.ItsmMetric), args.Error(1)
+func (m *MockMetricGaugeRepository) GetMetricGaugeJson(gaugeRequest *model.GraphRequest) (model.MetricGauge, error) {
+	args := m.Called(gaugeRequest)
+	return args.Get(0).(model.MetricGauge), args.Error(1)
 }
 
-// NewItsmMetricApi creates a new instance of DefaultItsmMetricApi
-func NewItsmMetricApi(repository model.ItsmMetricRepository) DefaultItsmMetricApi {
-	return DefaultItsmMetricApi{repo: repository}
+// NewMetricGaugeApi creates a new instance of DefaultMetricGaugeApi
+func NewMetricGaugeApi(repository model.MetricGaugeRepository) DefaultMetricGaugeApi {
+	return DefaultMetricGaugeApi{repo: repository}
 }
 
 // Test functions
 
-func TestGetItsmMetric(t *testing.T) {
-	mockRepo := new(MockItsmMetricRepository)
-	expectedResult := model.ItsmMetric{ /* initialize with some data */ }
-	mockRepo.On("GetItsmMetric").Return(expectedResult, nil)
+func TestGetMetricGauge(t *testing.T) {
+	mockRepo := new(MockMetricGaugeRepository)
+	queriesValue := &url.Values{ /* initialize with some data */ }
+	expectedResult := model.MetricGauge{ /* initialize with some data */ }
+	mockRepo.On("GetMetricGauge", queriesValue).Return(expectedResult, nil)
 
-	api := NewItsmMetricApi(mockRepo)
-	result, err := api.GetItsmMetric()
+	api := NewMetricGaugeApi(mockRepo)
+	result, err := api.GetMetricGauge(queriesValue)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResult, result)
 	mockRepo.AssertExpectations(t)
 }
 
-func TestGetItsmMetricJson(t *testing.T) {
-	mockRepo := new(MockItsmMetricRepository)
-	graphRequest := &model.GraphRequest{ /* initialize with some data */ }
-	expectedResult := model.ItsmMetric{ /* initialize with some data */ }
-	mockRepo.On("GetItsmMetricJson", graphRequest).Return(expectedResult, nil)
+func TestGetMetricGaugeJson(t *testing.T) {
+	mockRepo := new(MockMetricGaugeRepository)
+	gaugeRequest := &model.GraphRequest{ /* initialize with some data */ }
+	expectedResult := model.MetricGauge{ /* initialize with some data */ }
+	mockRepo.On("GetMetricGaugeJson", gaugeRequest).Return(expectedResult, nil)
 
-	api := NewItsmMetricApi(mockRepo)
-	result, err := api.GetItsmMetricJson(graphRequest)
+	api := NewMetricGaugeApi(mockRepo)
+	result, err := api.GetMetricGaugeJson(gaugeRequest)
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedResult, result)
