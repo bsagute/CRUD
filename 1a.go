@@ -1,84 +1,79 @@
-package main
+package api
 
 import (
-    "context"
-    "fmt"
-    "net/http"
-    "time"
+	"errors"
+	"net/url"
+	"testing"
 
-    "github.com/hashicorp/go-retryablehttp"
-    "golang.org/x/oauth2"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/your/repository/model"
 )
 
-// Client represents an HTTP client with a timeout
-type Client struct {
-    HTTPClient *http.Client
-    timeout    time.Duration
+// Mock for the AppinfoRepository
+type MockAppinfoRepository struct {
+	mock.Mock
 }
 
-// ClientOption defines a function type for setting client options
-type ClientOption func(*Client)
-
-// defaultClient returns a standard HTTP client with the given timeout
-func defaultClient(timeout time.Duration) *http.Client {
-    return &http.Client{
-        Timeout: timeout,
-    }
+func (m *MockAppinfoRepository) FindAll(params *url.Values) ([]model.Appinfo, error) {
+	args := m.Called(params)
+	return args.Get(0).([]model.Appinfo), args.Error(1)
 }
 
-// passthroughErrorHandler is a basic error handler for retryablehttp
-func passthroughErrorHandler(resp *http.Response, err error, numTries int) (*http.Response, error) {
-    // Log each retry attempt
-    fmt.Printf("Attempt %d: Error %v\n", numTries, err)
-    return resp, err
+func TestGetAllAppInfo(t *testing.T) {
+	mockRepo := new(MockAppinfoRepository)
+	api := NewAppinfoApi(mockRepo)
+
+	params := &url.Values{}
+	expectedResult := []model.Appinfo{
+		{
+			App_id:         uuid.New(),
+			App_name:       "App1",
+			App_type:       "Type1",
+			App_description: "Description1",
+			Components:     nil,
+			Metricinfo:     nil,
+		},
+		{
+			App_id:         uuid.New(),
+			App_name:       "App2",
+			App_type:       "Type2",
+			App_description: "Description2",
+			Components:     nil,
+			Metricinfo:     nil,
+		},
+	}
+
+	// Setting up expectations
+	mockRepo.On("FindAll", params).Return(expectedResult, nil)
+
+	// Call the method
+	result, err := api.GetAllAppInfo(params)
+
+	// Assert the expectations
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
+
+	mockRepo.AssertExpectations(t)
 }
 
-// initHTTP initializes a retryable HTTP client with the given retry max and logger
-func initHTTP(retryMax int, leveledLogger retryablehttp.LeveledLogger) ClientOption {
-    return func(c *Client) {
-        // Create a new retryable HTTP client
-        retryableHTTPClient := retryablehttp.NewClient()
-        retryableHTTPClient.HTTPClient = defaultClient(c.timeout) // Initialize with default client
+func TestGetAllAppInfo_Error(t *testing.T) {
+	mockRepo := new(MockAppinfoRepository)
+	api := NewAppinfoApi(mockRepo)
 
-        // Set retry max and logger
-        retryableHTTPClient.RetryMax = retryMax
-        retryableHTTPClient.Logger = leveledLogger
+	params := &url.Values{}
+	expectedError := errors.New("some error")
 
-        // Set the error handler
-        retryableHTTPClient.ErrorHandler = passthroughErrorHandler
-        fmt.Printf("== HTTPCLIENT passthroughErrorHandler.retryMax: %d\n", retryMax)
+	// Setting up expectations
+	mockRepo.On("FindAll", params).Return(nil, expectedError)
 
-        // Assign the retryable client to the main client
-        c.HTTPClient = retryableHTTPClient.StandardClient()
-        c.HTTPClient.Timeout = c.timeout
-    }
-}
+	// Call the method
+	result, err := api.GetAllAppInfo(params)
 
-func main() {
-    // Initialize the main client with a timeout
-    client := &Client{
-        timeout: 10 * time.Second,
-    }
+	// Assert the expectations
+	assert.Nil(t, result)
+	assert.Equal(t, expectedError, err)
 
-    // Apply the retryable HTTP client option
-    option := initHTTP(3, retryablehttp.NewLogger(retryablehttp.INFO))
-    option(client)
-
-    // Create a new request
-    req, err := retryablehttp.NewRequest("GET", "https://example.com", nil)
-    if err != nil {
-        fmt.Printf("Error creating request: %v\n", err)
-        return
-    }
-
-    // Perform the request using the retryable HTTP client
-    resp, err := client.HTTPClient.Do(req)
-    if err != nil {
-        fmt.Printf("Request failed: %v\n", err)
-        return
-    }
-    defer resp.Body.Close()
-
-    // Print the status of the response
-    fmt.Println("Request succeeded with status:", resp.Status)
+	mockRepo.AssertExpectations(t)
 }
