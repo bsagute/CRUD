@@ -2,84 +2,61 @@ package api
 
 import (
     "errors"
-    "testing"
-
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
+    "testing"
+    "github.com/yourusername/yourproject/pkg/model" // Adjust the import path accordingly
 )
 
-// Mock repository
-type MockMetricGraphMultiLineRepository struct {
+// MockMetricReqRepository is a mock implementation of the MetricReqRepository interface
+type MockMetricReqRepository struct {
     mock.Mock
 }
 
-func (m *MockMetricGraphMultiLineRepository) GetMetricGraphMultiLine() (model.MetricGraphMultiLine, error) {
+func (m *MockMetricReqRepository) GetMetricReq() (model.MetricReq, error) {
     args := m.Called()
-    return args.Get(0).(model.MetricGraphMultiLine), args.Error(1)
+    return args.Get(0).(model.MetricReq), args.Error(1)
 }
 
-func (m *MockMetricGraphMultiLineRepository) GetMetricGraphMultiLineJson(graphRequest *model.GraphRequest) (model.MetricGraphMultiLine, error) {
-    args := m.Called(graphRequest)
-    return args.Get(0).(model.MetricGraphMultiLine), args.Error(1)
-}
+func TestGetMetricReq_Success(t *testing.T) {
+    // Arrange
+    expectedMetricReq := model.MetricReq{
+        // Fill with appropriate fields
+    }
 
-func (m *MockMetricGraphMultiLineRepository) GetMetricGraphMultiLineMetric(graphRequest *model.GraphRequest) (model.MetricGraphMultiLine, error) {
-    args := m.Called(graphRequest)
-    return args.Get(0).(model.MetricGraphMultiLine), args.Error(1)
-}
+    mockRepo := new(MockMetricReqRepository)
+    mockRepo.On("GetMetricReq").Return(expectedMetricReq, nil)
 
-func (m *MockMetricGraphMultiLineRepository) GetMetricGraphMultiLineDynamic(graphRequest *model.GraphRequest) (model.PodMetricGraphMultiLine, error) {
-    args := m.Called(graphRequest)
-    return args.Get(0).(model.PodMetricGraphMultiLine), args.Error(1)
-}
+    api := DefaultMetricReqApi{
+        repo: mockRepo,
+    }
 
-func TestDefaultMetricGraphMultiLineApi_GetMetricGraphMultiLine(t *testing.T) {
-    mockRepo := new(MockMetricGraphMultiLineRepository)
-    service := DefaultMetricGraphMultiLineApi{repo: mockRepo}
+    // Act
+    result, err := api.GetMetricReq()
 
-    expectedResult := model.MetricGraphMultiLine{}
-    mockRepo.On("GetMetricGraphMultiLine").Return(expectedResult, nil)
-
-    result, err := service.GetMetricGraphMultiLine()
+    // Assert
     assert.NoError(t, err)
-    assert.Equal(t, expectedResult, result)
+    assert.Equal(t, expectedMetricReq, result)
+    mockRepo.AssertExpectations(t)
 }
 
-func TestDefaultMetricGraphMultiLineApi_GetMetricGraphMultiLineJson(t *testing.T) {
-    mockRepo := new(MockMetricGraphMultiLineRepository)
-    service := DefaultMetricGraphMultiLineApi{repo: mockRepo}
+func TestGetMetricReq_Error(t *testing.T) {
+    // Arrange
+    expectedError := errors.New("some error")
 
-    expectedResult := model.MetricGraphMultiLine{}
-    graphRequest := &model.GraphRequest{}
-    mockRepo.On("GetMetricGraphMultiLineJson", graphRequest).Return(expectedResult, nil)
+    mockRepo := new(MockMetricReqRepository)
+    mockRepo.On("GetMetricReq").Return(model.MetricReq{}, expectedError)
 
-    result, err := service.GetMetricGraphMultiLineJson(graphRequest)
-    assert.NoError(t, err)
-    assert.Equal(t, expectedResult, result)
-}
+    api := DefaultMetricReqApi{
+        repo: mockRepo,
+    }
 
-func TestDefaultMetricGraphMultiLineApi_GetMetricGraphMultiLineMetric(t *testing.T) {
-    mockRepo := new(MockMetricGraphMultiLineRepository)
-    service := DefaultMetricGraphMultiLineApi{repo: mockRepo}
+    // Act
+    result, err := api.GetMetricReq()
 
-    expectedResult := model.MetricGraphMultiLine{}
-    graphRequest := &model.GraphRequest{}
-    mockRepo.On("GetMetricGraphMultiLineMetric", graphRequest).Return(expectedResult, nil)
-
-    result, err := service.GetMetricGraphMultiLineMetric(graphRequest)
-    assert.NoError(t, err)
-    assert.Equal(t, expectedResult, result)
-}
-
-func TestDefaultMetricGraphMultiLineApi_GetMetricGraphMultiLineDynamic(t *testing.T) {
-    mockRepo := new(MockMetricGraphMultiLineRepository)
-    service := DefaultMetricGraphMultiLineApi{repo: mockRepo}
-
-    expectedResult := model.PodMetricGraphMultiLine{}
-    graphRequest := &model.GraphRequest{}
-    mockRepo.On("GetMetricGraphMultiLineDynamic", graphRequest).Return(expectedResult, nil)
-
-    result, err := service.GetMetricGraphMultiLineDynamic(graphRequest)
-    assert.NoError(t, err)
-    assert.Equal(t, expectedResult, result)
+    // Assert
+    assert.Error(t, err)
+    assert.Equal(t, expectedError, err)
+    assert.Equal(t, model.MetricReq{}, result)
+    mockRepo.AssertExpectations(t)
 }
