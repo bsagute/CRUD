@@ -1,164 +1,143 @@
-package api
+package db_test
 
 import (
-    "net/url"
-    "testing"
-    "github.com/stretchr/testify/assert"
-    "github.com/stretchr/testify/mock"
-    "github.com/yourusername/yourproject/pkg/model" // Adjust the import path accordingly
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"gorm.io/gorm"
+
+	"github.com/YOUR_USERNAME/YOUR_PROJECT/db"
+	"github.com/YOUR_USERNAME/YOUR_PROJECT/model"
 )
 
-// MockMetricTableRepository is a mock implementation of the MetricTableRepository interface
-type MockMetricTableRepository struct {
-    mock.Mock
+// MockGormDB is a mock type for the Gorm DB
+type MockGormDB struct {
+	mock.Mock
 }
 
-func (m *MockMetricTableRepository) GetMetricTable(id *url.Values) (model.MetricTable, error) {
-    args := m.Called(id)
-    return args.Get(0).(model.MetricTable), args.Error(1)
+func (m *MockGormDB) Raw(sql string, values ...interface{}) *gorm.DB {
+	args := m.Called(sql, values)
+	return args.Get(0).(*gorm.DB)
 }
 
-func (m *MockMetricTableRepository) GetMetricTableJson(graphRequest *model.GraphRequest) (model.MetricTable, error) {
-    args := m.Called(graphRequest)
-    return args.Get(0).(model.MetricTable), args.Error(1)
+func (m *MockGormDB) Model(value interface{}) *gorm.DB {
+	args := m.Called(value)
+	return args.Get(0).(*gorm.DB)
 }
 
-func (m *MockMetricTableRepository) GetMetricTableMetric(graphRequest *model.GraphRequest) (model.MetricTable, error) {
-    args := m.Called(graphRequest)
-    return args.Get(0).(model.MetricTable), args.Error(1)
+func (m *MockGormDB) Where(query interface{}, args ...interface{}) *gorm.DB {
+	mockArgs := m.Called(query, args)
+	return mockArgs.Get(0).(*gorm.DB)
 }
 
-func TestGetMetricTable_Success(t *testing.T) {
-    // Arrange
-    id := &url.Values{}
-    expectedMetricTable := model.MetricTable{
-        // Fill with appropriate fields
-    }
-
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTable", id).Return(expectedMetricTable, nil)
-
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
-
-    // Act
-    result, err := api.GetMetricTable(id)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.Equal(t, expectedMetricTable, result)
-    mockRepo.AssertExpectations(t)
+func (m *MockGormDB) Find(dest interface{}, conds ...interface{}) *gorm.DB {
+	args := m.Called(dest, conds)
+	return args.Get(0).(*gorm.DB)
 }
 
-func TestGetMetricTable_Error(t *testing.T) {
-    // Arrange
-    id := &url.Values{}
-    expectedError := errors.New("some error")
+func TestFindAllComp(t *testing.T) {
+	mockDB := new(MockGormDB)
+	repo := db.ApplistRepositoryDb{
+		getGorm: mockDB,
+	}
 
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTable", id).Return(model.MetricTable{}, expectedError)
+	expectedResult := model.Applist{}
+	mockDB.On("Raw", mock.Anything, mock.Anything).Return(&gorm.DB{})
 
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
-
-    // Act
-    result, err := api.GetMetricTable(id)
-
-    // Assert
-    assert.Error(t, err)
-    assert.Equal(t, expectedError, err)
-    assert.Equal(t, model.MetricTable{}, result)
-    mockRepo.AssertExpectations(t)
+	result, err := repo.FindAllComp()
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockDB.AssertExpectations(t)
 }
 
-func TestGetMetricTableJson_Success(t *testing.T) {
-    // Arrange
-    graphRequest := &model.GraphRequest{}
-    expectedMetricTable := model.MetricTable{
-        // Fill with appropriate fields
-    }
+func TestFindServiceMapData(t *testing.T) {
+	mockDB := new(MockGormDB)
+	repo := db.ApplistRepositoryDb{
+		getGorm: mockDB,
+	}
 
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTableJson", graphRequest).Return(expectedMetricTable, nil)
+	expectedResult := []model.ServiceInfoRes{}
+	mockDB.On("Raw", mock.Anything, mock.Anything).Return(&gorm.DB{})
 
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
-
-    // Act
-    result, err := api.GetMetricTableJson(graphRequest)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.Equal(t, expectedMetricTable, result)
-    mockRepo.AssertExpectations(t)
+	result, err := repo.FindServiceMapData("some-service-id")
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockDB.AssertExpectations(t)
 }
 
-func TestGetMetricTableJson_Error(t *testing.T) {
-    // Arrange
-    graphRequest := &model.GraphRequest{}
-    expectedError := errors.New("some error")
+func TestFindMetricsMetadata(t *testing.T) {
+	repo := db.ApplistRepositoryDb{}
 
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTableJson", graphRequest).Return(model.MetricTable{}, expectedError)
+	expectedResult := []model.MetricMetadataResponse{}
 
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
-
-    // Act
-    result, err := api.GetMetricTableJson(graphRequest)
-
-    // Assert
-    assert.Error(t, err)
-    assert.Equal(t, expectedError, err)
-    assert.Equal(t, model.MetricTable{}, result)
-    mockRepo.AssertExpectations(t)
+	result, err := repo.FindMetricsMetadata("some-entity-id", []string{"type1", "type2"})
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
 }
 
-func TestGetMetricTableMetric_Success(t *testing.T) {
-    // Arrange
-    graphRequest := &model.GraphRequest{}
-    expectedMetricTable := model.MetricTable{
-        // Fill with appropriate fields
-    }
+func TestCheckServiceMapByServiceId(t *testing.T) {
+	mockDB := new(MockGormDB)
+	repo := db.ApplistRepositoryDb{
+		getGorm: mockDB,
+	}
 
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTableMetric", graphRequest).Return(expectedMetricTable, nil)
+	expectedResult := model.ServiceInfo{}
+	mockDB.On("Model", mock.Anything).Return(mockDB)
+	mockDB.On("Where", "service_id = ?", mock.Anything).Return(mockDB)
+	mockDB.On("Find", mock.Anything).Return(&gorm.DB{})
 
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
-
-    // Act
-    result, err := api.GetMetricTableMetric(graphRequest)
-
-    // Assert
-    assert.NoError(t, err)
-    assert.Equal(t, expectedMetricTable, result)
-    mockRepo.AssertExpectations(t)
+	result, err := repo.CheckServiceMapByServiceId("some-service-id")
+	assert.Nil(t, err)
+	assert.Equal(t, &expectedResult, result)
+	mockDB.AssertExpectations(t)
 }
 
-func TestGetMetricTableMetric_Error(t *testing.T) {
-    // Arrange
-    graphRequest := &model.GraphRequest{}
-    expectedError := errors.New("some error")
+func TestFindJourneyDetails(t *testing.T) {
+	mockDB := new(MockGormDB)
+	repo := db.ApplistRepositoryDb{
+		getGorm: mockDB,
+	}
 
-    mockRepo := new(MockMetricTableRepository)
-    mockRepo.On("GetMetricTableMetric", graphRequest).Return(model.MetricTable{}, expectedError)
+	expectedResult := []model.JourneyItsmDetailsRes{}
+	mockDB.On("Raw", mock.Anything, mock.Anything).Return(&gorm.DB{})
 
-    api := DefaultMetricTableApi{
-        repo: mockRepo,
-    }
+	params := model.JourneyParams{
+		StartDate: "2023-01-01",
+		EndDate:   "2023-12-31",
+		Limit:     10,
+		Offset:    0,
+	}
+	result, err := repo.FindJourneyDetails(params)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockDB.AssertExpectations(t)
+}
 
-    // Act
-    result, err := api.GetMetricTableMetric(graphRequest)
+func TestFindJourneyList(t *testing.T) {
+	mockDB := new(MockGormDB)
+	repo := db.ApplistRepositoryDb{
+		getGorm: mockDB,
+	}
 
-    // Assert
-    assert.Error(t, err)
-    assert.Equal(t, expectedError, err)
-    assert.Equal(t, model.MetricTable{}, result)
-    mockRepo.AssertExpectations(t)
+	expectedResult := []model.JourneyListRes{}
+	mockDB.On("Raw", "select distinct journey_id, journey_name from journey_carid_mapping").Return(&gorm.DB{})
+
+	result, err := repo.FindJourneyList()
+	assert.Nil(t, err)
+	assert.Equal(t, expectedResult, result)
+	mockDB.AssertExpectations(t)
+}
+
+func TestGetApplistData(t *testing.T) {
+	mockDB := new(MockGormDB)
+	mockDB.On("Preload", "LayoutsInfos", "graph_type = ?", "table").Return(mockDB)
+	mockDB.On("Where", "parent_entity_id is null").Return(mockDB)
+	mockDB.On("Find", mock.Anything).Return(&gorm.DB{})
+
+	result, err := db.getApplistData(mockDB)
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	mockDB.AssertExpectations(t)
 }
