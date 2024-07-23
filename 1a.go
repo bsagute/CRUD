@@ -1,80 +1,164 @@
 package api
 
 import (
-    "errors"
+    "net/url"
+    "testing"
     "github.com/stretchr/testify/assert"
     "github.com/stretchr/testify/mock"
-    "testing"
     "github.com/yourusername/yourproject/pkg/model" // Adjust the import path accordingly
 )
 
-// MockMetricReqRepository is a mock implementation of the MetricReqRepository interface
-type MockMetricReqRepository struct {
+// MockMetricTableRepository is a mock implementation of the MetricTableRepository interface
+type MockMetricTableRepository struct {
     mock.Mock
 }
 
-// GetMetricReq is a method on MockMetricReqRepository that mocks the real implementation
-func (m *MockMetricReqRepository) GetMetricReq() (model.MetricReq, error) {
-    args := m.Called()
-    // Ensure safe type assertion
-    var metricReq model.MetricReq
-    if args.Get(0) != nil {
-        metricReq = args.Get(0).(model.MetricReq)
-    }
-    return metricReq, args.Error(1)
+func (m *MockMetricTableRepository) GetMetricTable(id *url.Values) (model.MetricTable, error) {
+    args := m.Called(id)
+    return args.Get(0).(model.MetricTable), args.Error(1)
 }
 
-// DefaultMetricReqApi is the struct that implements the MetricReqApi interface
-type DefaultMetricReqApi struct {
-    repo MetricReqRepository
+func (m *MockMetricTableRepository) GetMetricTableJson(graphRequest *model.GraphRequest) (model.MetricTable, error) {
+    args := m.Called(graphRequest)
+    return args.Get(0).(model.MetricTable), args.Error(1)
 }
 
-// GetMetricReq calls the repository method and returns its result
-func (api DefaultMetricReqApi) GetMetricReq() (model.MetricReq, error) {
-    return api.repo.GetMetricReq()
+func (m *MockMetricTableRepository) GetMetricTableMetric(graphRequest *model.GraphRequest) (model.MetricTable, error) {
+    args := m.Called(graphRequest)
+    return args.Get(0).(model.MetricTable), args.Error(1)
 }
 
-// TestGetMetricReq_Success tests the successful scenario of GetMetricReq method
-func TestGetMetricReq_Success(t *testing.T) {
+func TestGetMetricTable_Success(t *testing.T) {
     // Arrange
-    expectedMetricReq := model.MetricReq{
+    id := &url.Values{}
+    expectedMetricTable := model.MetricTable{
         // Fill with appropriate fields
     }
 
-    mockRepo := new(MockMetricReqRepository)
-    mockRepo.On("GetMetricReq").Return(expectedMetricReq, nil)
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTable", id).Return(expectedMetricTable, nil)
 
-    api := DefaultMetricReqApi{
+    api := DefaultMetricTableApi{
         repo: mockRepo,
     }
 
     // Act
-    result, err := api.GetMetricReq()
+    result, err := api.GetMetricTable(id)
 
     // Assert
     assert.NoError(t, err)
-    assert.Equal(t, expectedMetricReq, result)
+    assert.Equal(t, expectedMetricTable, result)
     mockRepo.AssertExpectations(t)
 }
 
-// TestGetMetricReq_Error tests the error scenario of GetMetricReq method
-func TestGetMetricReq_Error(t *testing.T) {
+func TestGetMetricTable_Error(t *testing.T) {
     // Arrange
+    id := &url.Values{}
     expectedError := errors.New("some error")
 
-    mockRepo := new(MockMetricReqRepository)
-    mockRepo.On("GetMetricReq").Return(model.MetricReq{}, expectedError)
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTable", id).Return(model.MetricTable{}, expectedError)
 
-    api := DefaultMetricReqApi{
+    api := DefaultMetricTableApi{
         repo: mockRepo,
     }
 
     // Act
-    result, err := api.GetMetricReq()
+    result, err := api.GetMetricTable(id)
 
     // Assert
     assert.Error(t, err)
     assert.Equal(t, expectedError, err)
-    assert.Equal(t, model.MetricReq{}, result)
+    assert.Equal(t, model.MetricTable{}, result)
+    mockRepo.AssertExpectations(t)
+}
+
+func TestGetMetricTableJson_Success(t *testing.T) {
+    // Arrange
+    graphRequest := &model.GraphRequest{}
+    expectedMetricTable := model.MetricTable{
+        // Fill with appropriate fields
+    }
+
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTableJson", graphRequest).Return(expectedMetricTable, nil)
+
+    api := DefaultMetricTableApi{
+        repo: mockRepo,
+    }
+
+    // Act
+    result, err := api.GetMetricTableJson(graphRequest)
+
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, expectedMetricTable, result)
+    mockRepo.AssertExpectations(t)
+}
+
+func TestGetMetricTableJson_Error(t *testing.T) {
+    // Arrange
+    graphRequest := &model.GraphRequest{}
+    expectedError := errors.New("some error")
+
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTableJson", graphRequest).Return(model.MetricTable{}, expectedError)
+
+    api := DefaultMetricTableApi{
+        repo: mockRepo,
+    }
+
+    // Act
+    result, err := api.GetMetricTableJson(graphRequest)
+
+    // Assert
+    assert.Error(t, err)
+    assert.Equal(t, expectedError, err)
+    assert.Equal(t, model.MetricTable{}, result)
+    mockRepo.AssertExpectations(t)
+}
+
+func TestGetMetricTableMetric_Success(t *testing.T) {
+    // Arrange
+    graphRequest := &model.GraphRequest{}
+    expectedMetricTable := model.MetricTable{
+        // Fill with appropriate fields
+    }
+
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTableMetric", graphRequest).Return(expectedMetricTable, nil)
+
+    api := DefaultMetricTableApi{
+        repo: mockRepo,
+    }
+
+    // Act
+    result, err := api.GetMetricTableMetric(graphRequest)
+
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, expectedMetricTable, result)
+    mockRepo.AssertExpectations(t)
+}
+
+func TestGetMetricTableMetric_Error(t *testing.T) {
+    // Arrange
+    graphRequest := &model.GraphRequest{}
+    expectedError := errors.New("some error")
+
+    mockRepo := new(MockMetricTableRepository)
+    mockRepo.On("GetMetricTableMetric", graphRequest).Return(model.MetricTable{}, expectedError)
+
+    api := DefaultMetricTableApi{
+        repo: mockRepo,
+    }
+
+    // Act
+    result, err := api.GetMetricTableMetric(graphRequest)
+
+    // Assert
+    assert.Error(t, err)
+    assert.Equal(t, expectedError, err)
+    assert.Equal(t, model.MetricTable{}, result)
     mockRepo.AssertExpectations(t)
 }
