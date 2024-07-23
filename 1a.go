@@ -17,10 +17,11 @@ type MockMetricReqRepository struct {
 func (m *MockMetricReqRepository) GetMetricReq() (model.MetricReq, error) {
     args := m.Called()
     // Ensure safe type assertion
+    var metricReq model.MetricReq
     if args.Get(0) != nil {
-        return args.Get(0).(model.MetricReq), args.Error(1)
+        metricReq = args.Get(0).(model.MetricReq)
     }
-    return model.MetricReq{}, args.Error(1)
+    return metricReq, args.Error(1)
 }
 
 // DefaultMetricReqApi is the struct that implements the MetricReqApi interface
