@@ -13,11 +13,27 @@ type MockMetricReqRepository struct {
     mock.Mock
 }
 
+// GetMetricReq is a method on MockMetricReqRepository that mocks the real implementation
 func (m *MockMetricReqRepository) GetMetricReq() (model.MetricReq, error) {
     args := m.Called()
-    return args.Get(0).(model.MetricReq), args.Error(1)
+    // Ensure safe type assertion
+    if args.Get(0) != nil {
+        return args.Get(0).(model.MetricReq), args.Error(1)
+    }
+    return model.MetricReq{}, args.Error(1)
 }
 
+// DefaultMetricReqApi is the struct that implements the MetricReqApi interface
+type DefaultMetricReqApi struct {
+    repo MetricReqRepository
+}
+
+// GetMetricReq calls the repository method and returns its result
+func (api DefaultMetricReqApi) GetMetricReq() (model.MetricReq, error) {
+    return api.repo.GetMetricReq()
+}
+
+// TestGetMetricReq_Success tests the successful scenario of GetMetricReq method
 func TestGetMetricReq_Success(t *testing.T) {
     // Arrange
     expectedMetricReq := model.MetricReq{
@@ -40,6 +56,7 @@ func TestGetMetricReq_Success(t *testing.T) {
     mockRepo.AssertExpectations(t)
 }
 
+// TestGetMetricReq_Error tests the error scenario of GetMetricReq method
 func TestGetMetricReq_Error(t *testing.T) {
     // Arrange
     expectedError := errors.New("some error")
