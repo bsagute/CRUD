@@ -1,67 +1,55 @@
-package db_test
+package db
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
-
-	"github.com/YOUR_USERNAME/YOUR_PROJECT/db"
-	"github.com/YOUR_USERNAME/YOUR_PROJECT/entity"
 )
 
-// MockGormDB is a mock type for the Gorm DB
-type MockGormDB struct {
-	mock.Mock
-}
+func TestGetMetricTable(t *testing.T) {
+	// Mocking the necessary data and functions
+	gormDB := &gorm.DB{} // Mock or initialize a Gorm DB connection
+	repo := MetricTableRepositoryDb{getGorm: gormDB}
 
-func (m *MockGormDB) Raw(sql string, values ...interface{}) *gorm.DB {
-	args := m.Called(sql, values)
-	return args.Get(0).(*gorm.DB)
-}
+	query := url.Values{}
+	query.Set("someKey", "someValue") // Adjust according to actual query parameters
 
-func (m *MockGormDB) Scan(dest interface{}) *gorm.DB {
-	args := m.Called(dest)
-	return args.Get(0).(*gorm.DB)
-}
+	expectedMetricTable := model.MetricTable{} // Populate with expected data
 
-func TestFindJourneyList(t *testing.T) {
-	mockDB := new(MockGormDB)
-	repo := db.ApplistRepositoryDb{
-		getGorm: mockDB,
+	// Mock getTableData to return expected results
+	getTableData = func(db *gorm.DB, query url.Values) (model.MetricTable, error) {
+		return expectedMetricTable, nil
 	}
 
-	expectedResult := []entity.JourneyListRes{
-		{JourneyID: "1", JourneyName: "Test Journey"},
-	}
-
-	mockDB.On("Raw", "select distinct journey_id, journey_name from journey_carid_mapping").Return(mockDB)
-	mockDB.On("Scan", &[]entity.JourneyListRes{}).Run(func(args mock.Arguments) {
-		dest := args.Get(0).(*[]entity.JourneyListRes)
-		*dest = expectedResult
-	}).Return(&gorm.DB{})
-
-	result, err := repo.FindJourneyList()
-	assert.Nil(t, err)
-	assert.Equal(t, expectedResult, result)
-	mockDB.AssertExpectations(t)
+	metricTable, err := repo.GetMetricTable(query)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedMetricTable, metricTable)
 }
 
-func TestFindJourneyListError(t *testing.T) {
-	mockDB := new(MockGormDB)
-	repo := db.ApplistRepositoryDb{
-		getGorm: mockDB,
-	}
+func TestNewMetricTableRepositoryDb(t *testing.T) {
+	// Mocking the necessary data and functions
+	gormDB := &gorm.DB{} // Mock or initialize a Gorm DB connection
 
-	mockDB.On("Raw", "select distinct journey_id, journey_name from journey_carid_mapping").Return(mockDB)
-	mockDB.On("Scan", &[]entity.JourneyListRes{}).Return(&gorm.DB{
-		Error: errors.New("database error"),
-	})
+	// Create a mock JSON file
+	mockJSON := `{"id": "testID", "data": "testData"}`
+	ioutil.WriteFile("./pkg/jsondata/metric_table.json", []byte(mockJSON), 0644)
+	defer func() {
+		_ = ioutil.Remove("./pkg/jsondata/metric_table.json")
+	}()
 
-	result, err := repo.FindJourneyList()
-	assert.NotNil(t, err)
-	assert.Nil(t, result)
-	mockDB.AssertExpectations(t)
+	// Call the function
+	repo := NewMetricTableRepositoryDb(gormDB)
+
+	// Verify the results
+	assert.NotNil(t, repo)
+	assert.Equal(t, gormDB, repo.getGorm)
+	assert.Equal(t, "testID", repo.metricTable.ID)
+	assert.Equal(t, "testData", repo.metricTable.Data)
 }
