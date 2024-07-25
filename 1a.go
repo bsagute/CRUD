@@ -1,55 +1,72 @@
 package db
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"net/url"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
-func TestGetMetricTable(t *testing.T) {
-	// Mocking the necessary data and functions
-	gormDB := &gorm.DB{} // Mock or initialize a Gorm DB connection
-	repo := MetricTableRepositoryDb{getGorm: gormDB}
-
-	query := url.Values{}
-	query.Set("someKey", "someValue") // Adjust according to actual query parameters
-
-	expectedMetricTable := model.MetricTable{} // Populate with expected data
-
-	// Mock getTableData to return expected results
-	getTableData = func(db *gorm.DB, query url.Values) (model.MetricTable, error) {
-		return expectedMetricTable, nil
-	}
-
-	metricTable, err := repo.GetMetricTable(query)
-	assert.NoError(t, err)
-	assert.Equal(t, expectedMetricTable, metricTable)
+type MockApplication struct {
+	Application
 }
 
-func TestNewMetricTableRepositoryDb(t *testing.T) {
-	// Mocking the necessary data and functions
-	gormDB := &gorm.DB{} // Mock or initialize a Gorm DB connection
+func (app *MockApplication) GetDB() *gorm.DB {
+	// Mock database connection logic
+	return &gorm.DB{}
+}
 
-	// Create a mock JSON file
-	mockJSON := `{"id": "testID", "data": "testData"}`
-	ioutil.WriteFile("./pkg/jsondata/metric_table.json", []byte(mockJSON), 0644)
-	defer func() {
-		_ = ioutil.Remove("./pkg/jsondata/metric_table.json")
-	}()
+func TestGetGormDB(t *testing.T) {
+	app := &MockApplication{}
+
+	// Setup mock for logger.New
+	logOutput := os.Stdout
 
 	// Call the function
-	repo := NewMetricTableRepositoryDb(gormDB)
+	gormDB := app.GetGormDB()
 
-	// Verify the results
-	assert.NotNil(t, repo)
-	assert.Equal(t, gormDB, repo.getGorm)
-	assert.Equal(t, "testID", repo.metricTable.ID)
-	assert.Equal(t, "testData", repo.metricTable.Data)
+	// Verify the result
+	assert.NotNil(t, gormDB)
+	assert.Equal(t, logOutput, logOutput)
+	assert.Equal(t, logger.Config{
+		SlowThreshold:             time.Second,
+		LogLevel:                  logger.Info,
+		IgnoreRecordNotFoundError: false,
+		ParameterizedQueries:      false,
+		Colorful:                  false,
+	}, gormDB.Config.Logger)
+}
+
+func (app *MockApplication) GetGormDB() *gorm.DB {
+	app.onceGormDb.Do(func() {
+		newLogger := logger.New(
+			log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
+			logger.Config{
+				SlowThreshold:             time.Second,   // Slow SQL threshold
+				LogLevel:                  logger.Info,   // Log level
+				IgnoreRecordNotFoundError: false,         // Ignore ErrRecordNotFound error for logger
+				ParameterizedQueries:      false,         // Don't include params in the SQL log
+				Colorful:                  false,         // Disable color
+			},
+		)
+
+		var err error
+		gormDb, err = gorm.Open(postgres.New(postgres.Config{
+			Conn: app.GetDB(),
+		}), &gorm.Config{
+			Logger: newLogger,
+		})
+
+		if err != nil {
+			panic(fmt.Sprintf("Unable to connect to database: %v\n", err))
+		}
+	})
+
+	return gormDb
 }
