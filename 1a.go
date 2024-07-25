@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/amex-eng/go-paved-road/pkg/api"
 	"github.com/amex-eng/go-paved-road/pkg/model"
@@ -15,66 +14,66 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Ensure MockAppComponentApi implements the api.AppComponentApi interface
-var _ api.AppComponentApi = (*MockAppComponentApi)(nil)
+// Ensure MockAppInfoApi implements the api.AppInfoApi interface
+var _ api.AppInfoApi = (*MockAppInfoApi)(nil)
 
-type MockAppComponentApi struct{}
+type MockAppInfoApi struct{}
 
-func (m *MockAppComponentApi) GetAllAppComponent(queryValues url.Values) (interface{}, error) {
+func (m *MockAppInfoApi) GetAllAppInfo(queryValues url.Values) ([]model.AppInfo, error) {
 	if queryValues.Get("app_id") == "error" {
 		return nil, errors.New("mock error")
 	}
-	return "mock data", nil
+	return []model.AppInfo{{App_id: 1, App_name: "Test App", App_type: "Test Type", App_description: "Test Description"}}, nil
 }
 
-func TestGetAllAppComp(t *testing.T) {
-	mockService := &MockAppComponentApi{}
-	handler := &AppComponentHandler{
-		AppCompservice: mockService,
+func TestGetAllAppInfo(t *testing.T) {
+	mockService := &MockAppInfoApi{}
+	handler := &AppInfoHandler{
+		Apiservice: mockService,
 	}
 
-	req := httptest.NewRequest("GET", "/appcomponent?app_id=test&time_range=range&drill_level=level&component_id=comp", nil)
+	req := httptest.NewRequest("GET", "/appinfo?app_id=test&level=level&component_id=comp&metric_id=metric", nil)
 	w := httptest.NewRecorder()
 	ps := httprouter.Params{}
 
-	handler.GetAllAppComp(w, req, ps)
+	handler.GetAllAppInfo(w, req, ps)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	var responseData model.AppResponse
-	err := json.NewDecoder(resp.Body).Decode(&responseData)
+	var applist []model.AppInfo
+	err := json.NewDecoder(resp.Body).Decode(&applist)
 	assert.NoError(t, err)
 
-	assert.Equal(t, 200, responseData.Status)
-	assert.Equal(t, "success", responseData.Message)
-	assert.Equal(t, "mock data", responseData.Data)
+	assert.Equal(t, 1, len(applist))
+	assert.Equal(t, int32(1), applist[0].App_id)
+	assert.Equal(t, "Test App", applist[0].App_name)
+	assert.Equal(t, "Test Type", applist[0].App_type)
+	assert.Equal(t, "Test Description", applist[0].App_description)
 }
 
-func TestGetAllAppCompWithError(t *testing.T) {
-	mockService := &MockAppComponentApi{}
-	handler := &AppComponentHandler{
-		AppCompservice: mockService,
+func TestGetAllAppInfoWithError(t *testing.T) {
+	mockService := &MockAppInfoApi{}
+	handler := &AppInfoHandler{
+		Apiservice: mockService,
 	}
 
-	req := httptest.NewRequest("GET", "/appcomponent?app_id=error&time_range=range&drill_level=level&component_id=comp", nil)
+	req := httptest.NewRequest("GET", "/appinfo?app_id=error&level=level&component_id=comp&metric_id=metric", nil)
 	w := httptest.NewRecorder()
 	ps := httprouter.Params{}
 
-	handler.GetAllAppComp(w, req, ps)
+	handler.GetAllAppInfo(w, req, ps)
 
 	resp := w.Result()
 	defer resp.Body.Close()
 
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 
-	var responseData model.AppResponse
-	err := json.NewDecoder(resp.Body).Decode(&responseData)
+	var applist []model.AppInfo
+	err := json.NewDecoder(resp.Body).Decode(&applist)
 	assert.NoError(t, err)
 
-	assert.Equal(t, 500, responseData.Status)
-	assert.Equal(t, "mock error", responseData.Message)
-	assert.Nil(t, responseData.Data)
+	assert.Nil(t, applist)
 }
