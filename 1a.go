@@ -1,72 +1,77 @@
-package db
+package handlerapi
 
 import (
-	"log"
-	"os"
-	"sync"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/amex-eng/go-paved-road/pkg/api"
+	"github.com/amex-eng/go-paved-road/pkg/model"
+	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
-type MockApplication struct {
-	Application
+type MockAppComponentApi struct{}
+
+func (m *MockAppComponentApi) GetAllAppComponent(queryValues url.Values) (interface{}, error) {
+	if queryValues.Get("app_id") == "error" {
+		return nil, errors.New("mock error")
+	}
+	return "mock data", nil
 }
 
-func (app *MockApplication) GetDB() *gorm.DB {
-	// Mock database connection logic
-	return &gorm.DB{}
+func TestGetAllAppComp(t *testing.T) {
+	mockService := &MockAppComponentApi{}
+	handler := &AppComponentHandler{
+		AppCompservice: mockService,
+	}
+
+	req := httptest.NewRequest("GET", "/appcomponent?app_id=test&time_range=range&drill_level=level&component_id=comp", nil)
+	w := httptest.NewRecorder()
+	ps := httprouter.Params{}
+
+	handler.GetAllAppComp(w, req, ps)
+
+	resp := w.Result()
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var responseData model.AppResponse
+	err := json.NewDecoder(resp.Body).Decode(&responseData)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 200, responseData.Status)
+	assert.Equal(t, "success", responseData.Message)
+	assert.Equal(t, "mock data", responseData.Data)
 }
 
-func TestGetGormDB(t *testing.T) {
-	app := &MockApplication{}
+func TestGetAllAppCompWithError(t *testing.T) {
+	mockService := &MockAppComponentApi{}
+	handler := &AppComponentHandler{
+		AppCompservice: mockService,
+	}
 
-	// Setup mock for logger.New
-	logOutput := os.Stdout
+	req := httptest.NewRequest("GET", "/appcomponent?app_id=error&time_range=range&drill_level=level&component_id=comp", nil)
+	w := httptest.NewRecorder()
+	ps := httprouter.Params{}
 
-	// Call the function
-	gormDB := app.GetGormDB()
+	handler.GetAllAppComp(w, req, ps)
 
-	// Verify the result
-	assert.NotNil(t, gormDB)
-	assert.Equal(t, logOutput, logOutput)
-	assert.Equal(t, logger.Config{
-		SlowThreshold:             time.Second,
-		LogLevel:                  logger.Info,
-		IgnoreRecordNotFoundError: false,
-		ParameterizedQueries:      false,
-		Colorful:                  false,
-	}, gormDB.Config.Logger)
-}
+	resp := w.Result()
+	defer resp.Body.Close()
 
-func (app *MockApplication) GetGormDB() *gorm.DB {
-	app.onceGormDb.Do(func() {
-		newLogger := logger.New(
-			log.New(os.Stdout, "\r\n", log.LstdFlags), // io writer
-			logger.Config{
-				SlowThreshold:             time.Second,   // Slow SQL threshold
-				LogLevel:                  logger.Info,   // Log level
-				IgnoreRecordNotFoundError: false,         // Ignore ErrRecordNotFound error for logger
-				ParameterizedQueries:      false,         // Don't include params in the SQL log
-				Colorful:                  false,         // Disable color
-			},
-		)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var err error
-		gormDb, err = gorm.Open(postgres.New(postgres.Config{
-			Conn: app.GetDB(),
-		}), &gorm.Config{
-			Logger: newLogger,
-		})
+	var responseData model.AppResponse
+	err := json.NewDecoder(resp.Body).Decode(&responseData)
+	assert.NoError(t, err)
 
-		if err != nil {
-			panic(fmt.Sprintf("Unable to connect to database: %v\n", err))
-		}
-	})
-
-	return gormDb
+	assert.Equal(t, 500, responseData.Status)
+	assert.Equal(t, "mock error", responseData.Message)
+	assert.Nil(t, responseData.Data)
 }
