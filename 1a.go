@@ -15,6 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Ensure MockAppComponentApi implements the api.AppComponentApi interface
+var _ api.AppComponentApi = (*MockAppComponentApi)(nil)
+
 type MockAppComponentApi struct{}
 
 func (m *MockAppComponentApi) GetAllAppComponent(queryValues url.Values) (interface{}, error) {
